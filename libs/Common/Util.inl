@@ -612,7 +612,7 @@ inline TPoint3<TYPE> CorrectBarycentricCoordinates(TPoint2<TYPE> b) {
 // Encodes/decodes a normalized 3D vector in two parameters for the direction
 template<typename T, typename TR>
 inline void Normal2Dir(const TPoint3<T>& d, TPoint2<TR>& p) {
-	ASSERT(ISEQUAL(norm(d), T(1)));
+//	ASSERT(ISEQUAL(norm(d), T(1)));
 	p.x = TR(atan2(d.y, d.x));
 	p.y = TR(acos(d.z));
 }
@@ -656,7 +656,7 @@ inline T MaxDepthDifference(T d, T threshold) {
 }
 template<typename T>
 inline T DepthSimilarity(T d0, T d1) {
-	ASSERT(d0 > 0 && d1 > 0);
+//    ASSERT(d0 > 0 && d1 > 0);
 	#if 0
 	return ABS(d0-d1)*T(2)/(d0+d1);
 	#else
@@ -886,9 +886,8 @@ inline std::pair<TYPEW,TYPEW> ComputeX84Threshold(const TYPE* const values, size
 	std::nth_element(data.Begin(), mid, data.End());
 	const TYPEW median(*mid);
 	// threshold = 5.2 * MEDIAN(ABS(values-median));
-	using TYPEI = typename MakeSigned<TYPE>::type;
-	for (TYPE& val: data)
-		val = TYPE(ABS(TYPEI(val)-TYPEI(median)));
+	FOREACHPTR(pVal, data)
+		*pVal = ABS((*pVal)-median);
 	std::nth_element(data.Begin(), mid, data.End());
 	return std::make_pair(median, mul*TYPEW(*mid));
 } // ComputeX84Threshold

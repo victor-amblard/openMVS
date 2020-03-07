@@ -29,6 +29,14 @@
 
 # Custom
 *.tmp
+*.inl
+*.cmake
+*.make
+*.cxx
+*.hxx
+*.c
+*CMakeCache.txt
+CMakeFiles/
 .DS_Store
 CMakeSettings.json
 .vs/

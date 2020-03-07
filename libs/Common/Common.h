@@ -12,6 +12,30 @@
 // D E F I N E S ///////////////////////////////////////////////////
 
 #include "Config.h"
+#define PCL_NO_PRECOMPILE
+#include <pcl/pcl_macros.h>
+
+#include <pcl/common/common_headers.h>
+
+#include <pcl/point_types.h>
+
+#include <pcl/io/pcd_io.h>
+
+#include <pcl/filters/voxel_grid.h>
+#include <pcl/filters/extract_indices.h>
+#include <pcl/common/transforms.h>
+
+#include <pcl/octree/octree_pointcloud_density.h>
+#include <pcl/octree/octree_pointcloud_singlepoint.h>
+#include <pcl/octree/octree.h>
+#include <pcl/octree/octree_impl.h>
+//#include <pcl/visualization/pcl_visualizer.h>
+
+#include <octomap/octomap.h>
+#include <octomap/OcTree.h>
+
+#include <octomap/Pointcloud.h>
+
 
 // macors controling the verbosity
 #define TD_VERBOSE_OFF		0
@@ -178,6 +202,22 @@ extern String g_strWorkingFolderFull; // full path to current folder
 
 // P R O T O T Y P E S /////////////////////////////////////////////
 
+namespace pcl{
+    struct XPointXYZ
+    {
+      PCL_ADD_POINT4D;                  // preferred way of adding a XYZ+padding
+      float nClustered;
+      PCL_MAKE_ALIGNED_OPERATOR_NEW     // make sure our new allocators are aligned
+    } EIGEN_ALIGN16;                    // enforce SSE padding for correct memory alignment
+}
+POINT_CLOUD_REGISTER_POINT_STRUCT (pcl::XPointXYZ,
+                                   (float, x, x)
+                                   (float, y, y)
+                                   (float, z, z)
+                                   (float, nClustered, nClustered)
+)
+
+
 namespace SEACAVE {
 
 typedef TSphere<float, 2> Sphere2f;
@@ -277,6 +317,8 @@ typedef CLISTDEF0(Pixel8U) Pixel8UArr;
 typedef CLISTDEF0(Pixel32F) Pixel32FArr;
 typedef CLISTDEF0(Color8U) Color8UArr;
 typedef CLISTDEF0(Color32F) Color32FArr;
+
+typedef pcl::PointCloud<pcl::PointXYZ> PointCloudXYZ;
 /*----------------------------------------------------------------*/
 
 } // namespace SEACAVE
