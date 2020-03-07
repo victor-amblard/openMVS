@@ -118,7 +118,7 @@ public:
 			if (!depthMap.isInsideWithBorder<int,4>(pt))
 				return;
 			const float z((float)INVERT(normalPlane.dot(camera.TransformPointI2C(Point2(pt)))));
-			ASSERT(z > 0);
+            ASSERT(z > 0);
 			Depth& depth = depthMap(pt);
 			if (depth == 0 || depth > z) {
 				depth = z;
@@ -477,7 +477,7 @@ void MeshRefine::ListFaceAreas(Mesh::AreaArr& maxAreas)
 		for (int j=0; j<faceMap.rows; ++j) {
 			for (int i=0; i<faceMap.cols; ++i) {
 				const FIndex idxFace(faceMap(j,i));
-				ASSERT((idxFace == NO_ID && views[idxImage].depthMap(j,i) == 0) || (idxFace != NO_ID && views[idxImage].depthMap(j,i) > 0));
+//				ASSERT((idxFace == NO_ID && views[idxImage].depthMap(j,i) == 0) || (idxFace != NO_ID && views[idxImage].depthMap(j,i) > 0));
 				if (idxFace == NO_ID)
 					continue;
 				++areas[idxFace];

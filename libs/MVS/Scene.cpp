@@ -192,7 +192,7 @@ bool Scene::LoadInterface(const String & fileName)
 	return true;
 } // LoadInterface
 
-bool Scene::SaveInterface(const String & fileName, int version) const
+bool Scene::SaveInterface(const String & fileName) const
 {
 	TD_TIMER_STARTD();
 	Interface obj;
@@ -264,7 +264,7 @@ bool Scene::SaveInterface(const String & fileName, int version) const
 	}
 
 	// serialize out the current state
-	if (!ARCHIVE::SerializeSave(obj, fileName, version>=0?uint32_t(version):MVSI_PROJECT_VER))
+	if (!ARCHIVE::SerializeSave(obj, fileName))
 		return false;
 
 	DEBUG_EXTRA("Scene saved to interface format (%s):\n"
@@ -541,7 +541,7 @@ bool Scene::SelectNeighborViews(uint32_t ID, IndexArr& points, unsigned nMinView
 		String msg;
 		FOREACH(n, neighbors)
 			msg += String::FormatString(" %3u(%upts,%.2fscl)", neighbors[n].idx.ID, neighbors[n].idx.points, neighbors[n].idx.scale);
-		VERBOSE("Reference image %3u sees %u views:%s (%u shared points)", ID, neighbors.GetSize(), msg.c_str(), nPoints);
+//		VERBOSE("Reference image %3u sees %u views:%s (%u shared points)", ID, neighbors.GetSize(), msg.c_str(), nPoints);
 	}
 	#endif
 	if (points.GetSize() <= 3 || neighbors.GetSize() < MINF(nMinViews,nCalibratedImages-1)) {

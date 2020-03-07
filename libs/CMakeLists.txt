@@ -1,4 +1,6 @@
 # Add libraries
+cmake_minimum_required(VERSION 3.10)
+
 ADD_SUBDIRECTORY(Common)
 ADD_SUBDIRECTORY(Math)
 ADD_SUBDIRECTORY(IO)

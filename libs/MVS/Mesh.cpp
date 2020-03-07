@@ -2852,10 +2852,9 @@ void Mesh::Subdivide(const AreaArr& maxAreas, uint32_t maxArea)
 	FacetCountMap mapFaces; mapFaces.reserve(12*3);
 	vertices.Reserve(vertices.GetSize()*2);
 	faces.Reserve(faces.GetSize()*3);
-	const uint32_t maxAreaTh(2*maxArea);
 	FOREACH(f, maxAreas) {
 		const AreaArr::Type area(maxAreas[f]);
-		if (area <= maxAreaTh)
+		if (area <= maxArea)
 			continue;
 		// split face in four triangles
 		// by adding a new vertex at the middle of each edge
@@ -2893,7 +2892,7 @@ void Mesh::Subdivide(const AreaArr& maxAreas, uint32_t maxArea)
 			ASSERT(fc.second.count <= 2 || (fc.second.count == 3 && fc.first == f));
 			if (fc.second.count != 2)
 				continue;
-			if (fc.first < f && maxAreas[fc.first] > maxAreaTh) {
+			if (fc.first < f && maxAreas[fc.first] > maxArea) {
 				// already fully split, nothing to do
 				ASSERT(mapSplits[fc.first].idxVert[SplitFace::FindSharedEdge(faces[fc.first], face)] == newface[SplitFace::FindSharedEdge(face, faces[fc.first])]);
 				continue;

@@ -171,6 +171,7 @@ struct MVS_API DepthData {
 	IndexArr points; // indices of the sparse 3D points seen by the this image
 	BitMatrix mask; // mark pixels to be ignored
 	DepthMap depthMap; // depth-map
+	LidarMap lScan;
 	NormalMap normalMap; // normal-map in camera space
 	ConfidenceMap confMap; // confidence-map
 	float dMin, dMax; // global depth range for this image
@@ -440,13 +441,6 @@ struct MVS_API DepthEstimator {
 
 
 // Tools
-bool TriangulatePoints2DepthMap(
-	const DepthData::ViewData& image, const PointCloud& pointcloud, const IndexArr& points,
-	DepthMap& depthMap, NormalMap& normalMap, Depth& dMin, Depth& dMax);
-bool TriangulatePoints2DepthMap(
-	const DepthData::ViewData& image, const PointCloud& pointcloud, const IndexArr& points,
-	DepthMap& depthMap, Depth& dMin, Depth& dMax);
-
 MVS_API unsigned EstimatePlane(const Point3Arr&, Plane&, double& maxThreshold, bool arrInliers[]=NULL, size_t maxIters=0);
 MVS_API unsigned EstimatePlaneLockFirstPoint(const Point3Arr&, Plane&, double& maxThreshold, bool arrInliers[]=NULL, size_t maxIters=0);
 MVS_API unsigned EstimatePlaneTh(const Point3Arr&, Plane&, double maxThreshold, bool arrInliers[]=NULL, size_t maxIters=0);
@@ -455,8 +449,6 @@ MVS_API unsigned EstimatePlaneThLockFirstPoint(const Point3Arr&, Plane&, double 
 MVS_API void EstimatePointColors(const ImageArr& images, PointCloud& pointcloud);
 MVS_API void EstimatePointNormals(const ImageArr& images, PointCloud& pointcloud, int numNeighbors=16/*K-nearest neighbors*/);
 
-MVS_API bool EstimateNormalMap(const Matrix3x3f& K, const DepthMap&, NormalMap&);
-
 MVS_API bool SaveDepthMap(const String& fileName, const DepthMap& depthMap);
 MVS_API bool LoadDepthMap(const String& fileName, DepthMap& depthMap);
 MVS_API bool SaveNormalMap(const String& fileName, const NormalMap& normalMap);
@@ -464,6 +456,7 @@ MVS_API bool LoadNormalMap(const String& fileName, NormalMap& normalMap);
 MVS_API bool SaveConfidenceMap(const String& fileName, const ConfidenceMap& confMap);
 MVS_API bool LoadConfidenceMap(const String& fileName, ConfidenceMap& confMap);
 
+MVS_API bool ExportOverlayedImage(const String& fileName, const Image8U3& image, const DepthMap& depthMap, Depth minDepth, Depth maxDepth, bool sparse);
 MVS_API bool ExportDepthMap(const String& fileName, const DepthMap& depthMap, Depth minDepth=FLT_MAX, Depth maxDepth=0);
 MVS_API bool ExportNormalMap(const String& fileName, const NormalMap& normalMap);
 MVS_API bool ExportConfidenceMap(const String& fileName, const ConfidenceMap& confMap);

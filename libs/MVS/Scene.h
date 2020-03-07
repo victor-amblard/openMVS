@@ -35,8 +35,9 @@
 
 // I N C L U D E S /////////////////////////////////////////////////
 
-#include "SceneDensify.h"
+#include "DepthMap.h"
 #include "Mesh.h"
+#include "SceneDensify.h"
 
 
 // D E F I N E S ///////////////////////////////////////////////////
@@ -45,7 +46,7 @@
 // S T R U C T S ///////////////////////////////////////////////////
 
 namespace MVS {
-
+	
 // Forward declarations
 struct MVS_API DenseDepthMapData;
 
@@ -55,12 +56,14 @@ public:
 	PlatformArr platforms; // camera platforms, each containing the mounted cameras and all known poses
 	ImageArr images; // images, each referencing a platform's camera pose
 	PointCloud pointcloud; // point-cloud (sparse or dense), each containing the point position and the views seeing it
+    PointCloud pointCloudLidarCam; //point cloud fusing camera images and point cloud measurements
 	Mesh mesh; // mesh, represented as vertices and triangles, constructed from the input point-cloud
 
 	unsigned nCalibratedImages; // number of valid images
 
 	unsigned nMaxThreads; // maximum number of threads used to distribute the work load
-
+    const float LIDAR = 1;
+    const float CAMERA = 0;
 public:
 	inline Scene(unsigned _nMaxThreads=0) : nMaxThreads(Thread::getMaxThreads(_nMaxThreads)) {}
 
@@ -68,7 +71,7 @@ public:
 	bool IsEmpty() const;
 
 	bool LoadInterface(const String& fileName);
-	bool SaveInterface(const String& fileName, int version=-1) const;
+	bool SaveInterface(const String& fileName) const;
 
 	bool Import(const String& fileName);
 
@@ -81,17 +84,19 @@ public:
 	bool ExportCamerasMLP(const String& fileName, const String& fileNameScene) const;
 
 	// Dense reconstruction
-	bool DenseReconstruction(int nFusionMode=0);
+	bool DenseReconstruction();
 	bool ComputeDepthMaps(DenseDepthMapData& data);
 	void DenseReconstructionEstimate(void*);
 	void DenseReconstructionFilter(void*);
 	void PointCloudFilter(int thRemove=-1);
 
-	// Mesh reconstruction
-	bool ReconstructMesh(float distInsert=2, bool bUseFreeSpaceSupport=true, unsigned nItersFixNonManifold=4,
+    void transformPCL2MVS(const std::string& filename, int useLidar);
+
+    // Mesh reconstruction
+    bool ReconstructMesh(int useLidar, float distInsert=2, bool bUseFreeSpaceSupport=true, unsigned nItersFixNonManifold=4,
 						 float kSigma=2.f, float kQual=1.f, float kb=4.f,
 						 float kf=3.f, float kRel=0.1f/*max 0.3*/, float kAbs=1000.f/*min 500*/, float kOutl=400.f/*max 700.f*/,
-						 float kInf=(float)(INT_MAX/8));
+                         float kInf=(float)(INT_MAX/8));
 
 	// Mesh refinement
 	bool RefineMesh(unsigned nResolutionLevel, unsigned nMinResolution, unsigned nMaxViews, float fDecimateMesh, unsigned nCloseHoles, unsigned nEnsureEdgeSize, unsigned nMaxFaceArea, unsigned nScales, float fScaleStep, unsigned nReduceMemory, unsigned nAlternatePair, float fRegularityWeight, float fRatioRigidityElasticity, float fThPlanarVertex, float fGradientStep);

@@ -1,4 +1,6 @@
 # Find required packages
+
+
 FIND_PACKAGE(CGAL ${SYSTEM_PACKAGE_REQUIRED})
 if(CGAL_FOUND)
 	include_directories(${CGAL_INCLUDE_DIRS})
@@ -22,6 +24,18 @@ if(OpenMVS_USE_CERES)
 		set(OpenMVS_USE_CERES OFF)
 	endif()
 endif()
+find_package(PCL 1.10 REQUIRED COMPONENTS common io visualization segmentation filters )
+include_directories(${PCL_INCLUDE_DIRS})
+link_directories(${PCL_LIBRARY_DIRS})
+add_definitions(${PCL_DEFINITIONS})
+
+find_package(OCTOMAP REQUIRED)
+add_definitions(${OCTOMAP_DEFINITIONS})
+include_directories(${OCTOMAP_INCLUDE_DIRS})
+link_directories(${OCTOMAP_LIBRARY_DIRS})
+
+#find_package(QGLViewer REQUIRED)
+#add_definitions(${QGLViewer_DEFINITIONS})
 
 # List sources files
 FILE(GLOB PCH_C "Common.cpp")
@@ -42,7 +56,7 @@ cxx_library_with_type_no_pch(MVS "Libs" "" "${cxx_default}"
 set_target_pch(MVS Common.h)
 
 # Link its dependencies
-TARGET_LINK_LIBRARIES(MVS PRIVATE Common Math IO ${CERES_LIBS} ${CGAL_LIBS} ${CUDA_CUDA_LIBRARY})
+TARGET_LINK_LIBRARIES(MVS PRIVATE Common Math IO ${CERES_LIBS} ${PCL_LIBRARIES} ${OCTOMAP_LIBRARIES} ${CGAL_LIBS} ${CUDA_CUDA_LIBRARY})
 
 # Install
 SET_TARGET_PROPERTIES(MVS PROPERTIES

@@ -68,12 +68,18 @@ public:
 	typedef Pixel8U Color;
 	typedef CLISTDEF0(Color) ColorArr;
 
+    typedef uint8_t Sensor;
+    typedef SEACAVE::cList<Weight,const Sensor,0,4,uint32_t> SensorArr;
+    typedef SEACAVE::cList<Weight,const float,0,4,uint32_t> LVisibilityArr;
+
 	typedef AABB3f Box;
 
 public:
 	PointArr points;
 	PointViewArr pointViews; // array of views for each point (ordered increasing)
 	PointWeightArr pointWeights;
+    SensorArr sensors;
+    LVisibilityArr visibilities;
 	NormalArr normals;
 	ColorArr colors;
 
@@ -112,6 +118,7 @@ public:
 
 typedef MVS_API float Depth;
 typedef MVS_API Point3f Normal;
+typedef MVS_API pcl::PointCloud<pcl::PointXYZ>::Ptr LidarMap;
 typedef MVS_API TImage<Depth> DepthMap;
 typedef MVS_API TImage<Normal> NormalMap;
 typedef MVS_API TImage<float> ConfidenceMap;
