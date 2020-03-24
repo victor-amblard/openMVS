@@ -812,11 +812,9 @@ void Scene::transformPCL2MVS(const std::string& filename, int useLidar){
             ASSERT(success!=-1);
 
             PointCloud::ViewArr defaultViewArr;
+            const PointCloud::View defaultView(-1);
+            defaultViewArr.Insert(defaultView);
 
-            for (int i=0;i<images.GetSize();++i){ //magic number
-                const PointCloud::View defaultView(i);
-                defaultViewArr.Insert(defaultView);
-            }
 
             for(auto it=pFiltered.begin();it!=pFiltered.end();++it){
                 const Point3f curPoint(it->x, it->y, it->z);
@@ -824,8 +822,9 @@ void Scene::transformPCL2MVS(const std::string& filename, int useLidar){
                 pViews.Insert(defaultViewArr); //needs to be dobule checked
                 pSensors.Insert(LIDAR_WEIGHT);
                 ASSERT(it->nClustered!=0);
-                vArr.Insert(it->nClustered);
+                 vArr.Insert(it->nClustered);
             }
+
         }
 
         pointCloudLidarCam.points = pointsList;
@@ -846,7 +845,12 @@ bool Scene::ReconstructMesh(int useLidar,float distInsert, bool bUseFreeSpaceSup
 	using namespace DELAUNAY;
 	ASSERT(!pointcloud.IsEmpty());
 
+    PointCloud::ViewArr defaultLidarViewsArray;
 
+    for(size_t i=0;i<images.GetSize();++i){
+        const PointCloud::View defaultView(i);
+        defaultLidarViewsArray.Insert(defaultView);
+    }
 
     std::cout << useLidar << std::endl;
     transformPCL2MVS("/home/victor/Data/Stages/MIT/lidar_no_check2.pcd", useLidar);
@@ -887,8 +891,12 @@ bool Scene::ReconstructMesh(int useLidar,float distInsert, bool bUseFreeSpaceSup
 			const point_t& p = vertices[idx];
 
             const PointCloud::Point& point = pointCloudLidarCam.points[idx];
-            const PointCloud::ViewArr& views = pointCloudLidarCam.pointViews[idx];
             const PointCloud::Sensor& sensor = pointCloudLidarCam.sensors[idx];
+
+            PointCloud::ViewArr& views(pointCloudLidarCam.pointViews[idx]);
+            if (sensor==LIDAR)
+               views = defaultLidarViewsArray;
+
             const int nClustered = pointCloudLidarCam.visibilities[idx];
 
             //zvert_info_t curInfo;
@@ -1006,7 +1014,7 @@ bool Scene::ReconstructMesh(int useLidar,float distInsert, bool bUseFreeSpaceSup
         const float GAM = 1;
         const float ALPH = 32;
 
-        if (useLidar){
+        if (0){
 
             for (delaunay_t::Finite_facets_iterator fi=delaunay.finite_facets_begin(), eci=delaunay.finite_facets_end(); fi!=eci; ++fi) {
 
