@@ -790,6 +790,8 @@ void Scene::transformPCL2MVS(const std::string& filename, int useLidar){
         PointCloud::SensorArr pSensors; //to store Lidar/camera
         PointCloud::LVisibilityArr vArr;
 
+        pcl::PointCloud<pcl::PointXYZRGB>::Ptr totalCloud(new pcl::PointCloud<pcl::PointXYZRGB>);
+
         bool testLidarOnly = false;
          // Insert camera points
         if (!testLidarOnly){
@@ -797,9 +799,13 @@ void Scene::transformPCL2MVS(const std::string& filename, int useLidar){
             const PointCloud::Point& curCameraPoint(pointcloud.points[i]);
             const PointCloud::ViewArr& curViews(pointcloud.pointViews[i]);
             pointsList.Insert(curCameraPoint);
+
+            pcl::PointXYZRGB curP(curCameraPoint.x, curCameraPoint.y, curCameraPoint.z);
+            curP.b=255;
+            totalCloud->push_back(curP);
             pViews.Insert(curViews);
             pSensors.Insert(CAMERA_WEIGHT);
-            vArr.Insert(0);
+            vArr.Insert(0.f);
             }
         }
 
@@ -818,11 +824,15 @@ void Scene::transformPCL2MVS(const std::string& filename, int useLidar){
 
             for(auto it=pFiltered.begin();it!=pFiltered.end();++it){
                 const Point3f curPoint(it->x, it->y, it->z);
+                pcl::PointXYZRGB curPointColored(it->x, it->y, it->z);
+                curPointColored.r = 255;
+                totalCloud->push_back(curPointColored);
                 pointsList.Insert(curPoint);
                 pViews.Insert(defaultViewArr); //needs to be dobule checked
                 pSensors.Insert(LIDAR_WEIGHT);
                 ASSERT(it->nClustered!=0);
-                 vArr.Insert(it->nClustered);
+                float actualVisibility = static_cast<float>(std::max(it->nClustered, 100.f)/100); //Visibility bonus between 0 and 1
+                vArr.Insert(actualVisibility);
             }
 
         }
@@ -832,6 +842,7 @@ void Scene::transformPCL2MVS(const std::string& filename, int useLidar){
         pointCloudLidarCam.sensors = pSensors;
         pointCloudLidarCam.visibilities = vArr;
 
+        pcl::io::savePCDFile("/home/victor/Data/Stages/MIT/newer_college_dataset/subset/mix_lidar_camera.pcd", *totalCloud);
         VERBOSE("%u camera points, %u LiDAR points", pointcloud.points.GetSize(), pointCloudLidarCam.points.GetSize() - pointcloud.points.GetSize());
 
         pointcloud.Release();
@@ -853,7 +864,7 @@ bool Scene::ReconstructMesh(int useLidar,float distInsert, bool bUseFreeSpaceSup
     }
 
     std::cout << useLidar << std::endl;
-    transformPCL2MVS("/home/victor/Data/Stages/MIT/lidar_no_check2.pcd", useLidar);
+    transformPCL2MVS("/home/victor/Data/Stages/MIT/newer_college_dataset/subset/octomap_registered.pcd", useLidar);
 
 	mesh.Release();
 
@@ -898,6 +909,7 @@ bool Scene::ReconstructMesh(int useLidar,float distInsert, bool bUseFreeSpaceSup
                views = defaultLidarViewsArray;
 
             const int nClustered = pointCloudLidarCam.visibilities[idx];
+            if (true){
 
             //zvert_info_t curInfo;
             //curInfo.sensor = sensor;
@@ -983,7 +995,8 @@ bool Scene::ReconstructMesh(int useLidar,float distInsert, bool bUseFreeSpaceSup
 			// update point visibility info
             hint->info().InsertViews(pointCloudLidarCam, idx);
 			++progress;
-		});
+        }
+        });
 		progress.close();
         pointCloudLidarCam.Release();
 		// init cells weights and
@@ -1017,7 +1030,6 @@ bool Scene::ReconstructMesh(int useLidar,float distInsert, bool bUseFreeSpaceSup
         if (0){
 
             for (delaunay_t::Finite_facets_iterator fi=delaunay.finite_facets_begin(), eci=delaunay.finite_facets_end(); fi!=eci; ++fi) {
-
                 uint8_t mixed=0;
                 std::pair<cell_handle_t, int> facet = *fi;
 
@@ -1029,7 +1041,6 @@ bool Scene::ReconstructMesh(int useLidar,float distInsert, bool bUseFreeSpaceSup
                     //Lidar visibility bonus
                     if (sensorOrigin == LIDAR){
                         f += ALPH * facet.first->vertex((facet.second+j+1)%3)->info().alphaVisLidar;
-//                        std::cerr << facet.first->vertex((facet.second+j+1)%3)->info().alphaVisLidar << std::endl;
                     }
                 }
                 //Lidar smoothing bonus
@@ -1095,17 +1106,20 @@ bool Scene::ReconstructMesh(int useLidar,float distInsert, bool bUseFreeSpaceSup
 		for (delaunay_t::Vertex_iterator vi=delaunay.vertices_begin(), vie=delaunay.vertices_end(); vi!=vie; ++vi) {
 		#endif
 			vert_info_t& vert(vi->info());
+			PointCloud::Sensor& vertSensor(vert.sensor);
+
 			if (vert.views.IsEmpty())
 				continue;
 			#ifdef DELAUNAY_WEAKSURF
 			vert.AllocateInfo();
 			#endif
 			const point_t& p(vi->point());
-			const Point3 pt(CGAL2MVS<REAL>(p));
+            const Point3 pt(CGAL2MVS<REAL>(p));
+
 			FOREACH(v, vert.views) {
 				const typename vert_info_t::view_t view(vert.views[v]);
 				const uint32_t imageID(view.idxView);
-				const edge_cap_t alpha_vis(view.weight);
+				const edge_cap_t alpha_vis = (vertSensor == LIDAR) ? vert.alphaVisLidar : view.weight;
 				const Image& imageData = images[imageID];
 				ASSERT(imageData.IsValid());
 				const Camera& camera = imageData.camera;
@@ -1120,7 +1134,9 @@ bool Scene::ReconstructMesh(int useLidar,float distInsert, bool bUseFreeSpaceSup
 					continue;
 				do {
 					// assign score, weighted by the distance from the point to the intersection
-					const edge_cap_t w(alpha_vis*(1.f-EXP(-SQUARE((float)inter.dist)*inv2SigmaSq)));
+					// but for LIDAR we do have accurate range measurements 
+					const edge_cap_t distanceBonusCamera = (vertSensor == LIDAR) ? 1 : (1.f-EXP(-SQUARE((float)inter.dist)*inv2SigmaSq));
+					const edge_cap_t w(alpha_vis * distanceBonusCamera);
 					edge_cap_t& f(infoCells[inter.facet.first->info()].f[inter.facet.second]);
 					#ifdef DELAUNAY_USE_OPENMP
 					#pragma omp atomic
@@ -1139,7 +1155,7 @@ bool Scene::ReconstructMesh(int useLidar,float distInsert, bool bUseFreeSpaceSup
 				const cell_handle_t endCell(delaunay.locate(segEndPoint.source(), vi->cell()));
 				ASSERT(endCell != cell_handle_t());
 				fetchCellFacets<CGAL::NEGATIVE>(delaunay, hullFacets, endCell, imageData, facets);
-                edge_cap_t& t(infoCells[endCell->info()].t);
+                edge_cap_t& t(infoCells[endCell->info()].t); //This is the end cell's score
                 #ifdef DELAUNAY_USE_OPENMP
                 #pragma omp atomic
                 #endif
@@ -1147,8 +1163,11 @@ bool Scene::ReconstructMesh(int useLidar,float distInsert, bool bUseFreeSpaceSup
 				while (intersect(delaunay, segEndPoint, facets, facets, inter)) {
 					// assign score, weighted by the distance from the point to the intersection
 					const facet_t& mf(delaunay.mirror_facet(inter.facet));
-					const edge_cap_t w(alpha_vis*(1.f-EXP(-SQUARE((float)inter.dist)*inv2SigmaSq)));
-					edge_cap_t& f(infoCells[mf.first->info()].f[mf.second]);
+					
+					const edge_cap_t distanceBonusCamera = (vertSensor == LIDAR) ? 1 : (1.f-EXP(-SQUARE((float)inter.dist)*inv2SigmaSq));
+					const edge_cap_t w(alpha_vis * distanceBonusCamera);
+
+                    edge_cap_t& f(infoCells[mf.first->info()].f[mf.second]); // This is the score of a facet located on a ray coming from the sensor to the end point
 					#ifdef DELAUNAY_USE_OPENMP
 					#pragma omp atomic
 					#endif
@@ -1160,9 +1179,6 @@ bool Scene::ReconstructMesh(int useLidar,float distInsert, bool bUseFreeSpaceSup
 				ASSERT(vert.viewsInfo[v].cell2End == NULL);
 				vert.viewsInfo[v].cell2End = inter.facet.first;
 				#endif
-
-                // Add bonus/malus LiDAR
-
 			}
 			++progress;
 		}

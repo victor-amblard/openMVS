@@ -80,7 +80,7 @@ MDEFVAR_OPTDENSE_float(fMinAngle, "Min Angle", "Min angle for accepting the dept
 MDEFVAR_OPTDENSE_float(fOptimAngle, "Optim Angle", "Optimal angle for computing the depth triangulation", "10.0")
 MDEFVAR_OPTDENSE_float(fMaxAngle, "Max Angle", "Max angle for accepting the depth triangulation", "65.0")
 MDEFVAR_OPTDENSE_float(fDescriptorMinMagnitudeThreshold, "Descriptor Min Magnitude Threshold", "minimum texture variance accepted when matching two patches (0 - disabled)", "0.01")
-MDEFVAR_OPTDENSE_float(fDepthDiffThreshold, "Depth Diff Threshold", "maximum variance allowed for the depths during refinement", "0.01")
+MDEFVAR_OPTDENSE_float(fDepthDiffThreshold, "Depth Diff Threshold", "maximum variance allowed for the depths during refinement", "0.05  ")
 MDEFVAR_OPTDENSE_float(fNormalDiffThreshold, "Normal Diff Threshold", "maximum variance allowed for the normal during fusion (degrees)", "25")
 MDEFVAR_OPTDENSE_float(fPairwiseMul, "Pairwise Mul", "pairwise cost scale to match the unary cost", "0.3")
 MDEFVAR_OPTDENSE_float(fOptimizerEps, "Optimizer Eps", "MRF optimizer stop epsilon", "0.001")
@@ -262,8 +262,8 @@ void DepthEstimator::MapMatrix2ZigzagIdx(const Image8U::Size& size, DepthEstimat
 	coords.Reserve(size.area());
 	for (int dy=0, h=rawStride; dy<size.height; dy+=h) {
 		if (h*2 > size.height - dy)
-			h = size.height - dy;
-		int lastX = 0;
+            h = size.height - dy;
+        int lastX = 0;
 		MapRef x(MapRef::ZERO);
 		for (int i=0, ei=w*h; i<ei; ++i) {
 			const MapRef pt(x.x, x.y+dy);
@@ -1193,14 +1193,16 @@ bool MVS::ExportOverlayedImage(const String& fileName, const Image8U3& im, const
     cv::Mat depthMapCv(h,w, CV_8UC1, cv::Scalar(0));
 
     const float NORM_CST = 255/(maxDepth-minDepth);
-    const float eps = 0.0000001f;
+    const float eps = 0.001f;
 
     for(auto x=0;x<w;++x){
         for(auto y=0;y<h;++y){
             if (depthMap(y,x) > eps){
                 const uint8_t d = MINF(254,ROUND2INT((depthMap(y,x)-minDepth)*NORM_CST));
                 depthMapCv.at<uint8_t>(y,x) = d;
+//                VERBOSE("x = %u, y = %u  z = %f ", x,y,depthMap(y,x));
             }
+
         }
     }
     cv::Mat colorizedDepthMap(h, w, CV_8UC3);
@@ -1241,9 +1243,11 @@ bool MVS::ExportDepthMap(const String& fileName, const DepthMap& depthMap, Depth
 		}
 		if (!depths.IsEmpty()) {
 			const std::pair<Depth,Depth> th(ComputeX84Threshold<Depth,Depth>(depths.Begin(), depths.GetSize()));
-			maxDepth = th.first+th.second;
-			minDepth = th.first-th.second;
+            maxDepth = th.first+th.second;
+            minDepth = th.first-th.second;
 		}
+//        maxDepth = 100;
+//        minDepth = 0.1;
 		if (minDepth < 0.1f)
 			minDepth = 0.1f;
 		if (maxDepth < 0.1f)

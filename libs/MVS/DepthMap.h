@@ -171,10 +171,15 @@ struct MVS_API DepthData {
 	IndexArr points; // indices of the sparse 3D points seen by the this image
 	BitMatrix mask; // mark pixels to be ignored
 	DepthMap depthMap; // depth-map
+	DepthMap depthMapLidar;
+	DepthMap depthMapCamera;
 	LidarMap lScan;
 	NormalMap normalMap; // normal-map in camera space
+	NormalMap normalMapLidar;
+	NormalMap normalMapCamera;
+	float dMinLidar, dMaxLidar, dMinCamera, dMaxCamera;
 	ConfidenceMap confMap; // confidence-map
-	float dMin, dMax; // global depth range for this image
+    float dMin, dMax; // global depth range for this image
 	unsigned references; // how many times this depth-map is referenced (on 0 can be safely unloaded)
 	CriticalSection cs; // used to count references
 
