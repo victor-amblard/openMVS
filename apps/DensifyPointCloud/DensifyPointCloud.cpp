@@ -50,9 +50,9 @@ String strMeshFileName;
 String strDenseConfigFileName;
 float fSampleMesh;
 int thFilterPointCloud;
-int nFusionMode;
 int nArchiveType;
 int nProcessPriority;
+int iUseLidar;
 unsigned nMaxThreads;
 String strConfigFileName;
 boost::program_options::variables_map vm;
@@ -71,6 +71,7 @@ bool Initialize(size_t argc, LPCTSTR* argv)
 		("help,h", "produce this help message")
 		("working-folder,w", boost::program_options::value<std::string>(&WORKING_FOLDER), "working directory (default current directory)")
 		("config-file,c", boost::program_options::value<std::string>(&OPT::strConfigFileName)->default_value(APPNAME _T(".cfg")), "file name containing program options")
+        ("use-lidar,l",  boost::program_options::value<int>(&OPT::iUseLidar)->default_value(0), "If enabled will use lidar measurements")
 		("archive-type", boost::program_options::value(&OPT::nArchiveType)->default_value(2), "project archive type: 0-text, 1-binary, 2-compressed binary")
 		("process-priority", boost::program_options::value(&OPT::nProcessPriority)->default_value(-1), "process priority (below normal by default)")
 		("max-threads", boost::program_options::value(&OPT::nMaxThreads)->default_value(0), "maximum number of threads (0 for using all available cores)")
@@ -108,7 +109,6 @@ bool Initialize(size_t argc, LPCTSTR* argv)
 		("estimate-normals", boost::program_options::value(&nEstimateNormals)->default_value(0), "estimate the normals for the dense point-cloud")
 		("sample-mesh", boost::program_options::value(&OPT::fSampleMesh)->default_value(0.f), "uniformly samples points on a mesh (0 - disabled, <0 - number of points, >0 - sample density per square unit)")
 		("filter-point-cloud", boost::program_options::value(&OPT::thFilterPointCloud)->default_value(0), "filter dense point-cloud based on visibility (0 - disabled)")
-		("fusion-mode", boost::program_options::value(&OPT::nFusionMode)->default_value(0), "depth map fusion mode (-2 - fuse disparity-maps, -1 - export disparity-maps only, 0 - depth-maps & fusion, 1 - export depth-maps only)")
 		;
 
 	// hidden options, allowed both on command line and
@@ -173,7 +173,7 @@ bool Initialize(size_t argc, LPCTSTR* argv)
 		OPT::strDenseConfigFileName = MAKE_PATH_SAFE(OPT::strDenseConfigFileName);
 	OPTDENSE::init();
 	const bool bValidConfig(OPTDENSE::oConfig.Load(OPT::strDenseConfigFileName));
-	OPTDENSE::update();
+    OPTDENSE::update();
 	OPTDENSE::nResolutionLevel = nResolutionLevel;
 	OPTDENSE::nMaxResolution = nMaxResolution;
 	OPTDENSE::nMinResolution = nMinResolution;
@@ -258,13 +258,8 @@ int main(int argc, LPCTSTR* argv)
 	}
 	if ((ARCHIVE_TYPE)OPT::nArchiveType != ARCHIVE_MVS) {
 		TD_TIMER_START();
-		if (!scene.DenseReconstruction(OPT::nFusionMode)) {
-			if (ABS(OPT::nFusionMode) != 1)
-				return EXIT_FAILURE;
-			VERBOSE("Depth-maps estimated (%s)", TD_TIMER_GET_FMT().c_str());
-			Finalize();
-			return EXIT_SUCCESS;
-		}
+		if (!scene.DenseReconstruction())
+			return EXIT_FAILURE;
 		VERBOSE("Densifying point-cloud completed: %u points (%s)", scene.pointcloud.GetSize(), TD_TIMER_GET_FMT().c_str());
 	}
 
