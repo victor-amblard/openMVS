@@ -943,60 +943,6 @@ Eigen::Vector3f getColorMap(const float& f){
     return Eigen::Vector3f(r[idx], g[idx], b[idx]);
 }
 
-/*
-template <typename T>
-pcl::visualization::PCLVisualizer::Ptr simpleVis (pcl::PointCloud<T>::ConstPtr cloud){
-
-    pcl::visualization::PCLVisualizer::Ptr viewer (new pcl::visualization::PCLVisualizer ("3D Viewer"));
-    viewer->setBackgroundColor (0, 0, 0);
-    viewer->addPointCloud<T> (cloud, "sample cloud");
-    viewer->setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 5, "sample cloud");
-    viewer->addCoordinateSystem (1.0);
-    viewer->initCameraParameters ();
-    return (viewer);
-
-}
-*/
-void DepthMapsData::testDensityPointCloud(pcl::PointCloud<pcl::XPointXYZ> pCloud){
-
-    pcl::PointCloud<pcl::PointXYZRGB>::Ptr pclRGB(new pcl::PointCloud<pcl::PointXYZRGB>);
-
-    float maxiCluster = 0;
-    float miniCluster = INT_MAX-1;
-
-    for(auto it=pCloud.begin(); it!=pCloud.end();++it){
-        int curC = it->nClustered;
-        if (curC > maxiCluster)
-            maxiCluster = curC;
-        if (curC < miniCluster)
-            miniCluster = curC;
-    }
-    maxiCluster *= 1.1f;
-    miniCluster *= 0.9f;
-
-    const float scale = 1/(maxiCluster-miniCluster);
-
-    for(auto it = pCloud.begin();it!=pCloud.end();++it){
-        pcl::XPointXYZ p = {it->x, it->y, it->z, it->nClustered};
-        float rDensity = (p.nClustered-miniCluster)*scale;
-        Eigen::Vector3f rgb_ = getColorMap(rDensity);
-        pcl::PointXYZRGB pRGB = {p.x,p.y,p.z, rgb_(0), rgb_(1), rgb_(2)};
-        pclRGB->push_back(pRGB);
-    }
-
-    pcl::PCDWriter writer;
-    writer.write ("/home/victor/Data/Stages/MIT/test_pcd_rgb.pcd", *pclRGB);
-
-
-
-   /* //Visualize result
-    auto viewer = simpleVis(pclRGB);
-    while (!viewer->wasStopped ())
-     {
-       viewer->spinOnce (100);
-     }
-     */
-}
 
 // estimate depth-map using propagation and random refinement with NCC score
 // as in: "Accurate Multiple View 3D Reconstruction Using Patch-Based Stereo for Large-Scale Scenes", S. Shen, 2013
