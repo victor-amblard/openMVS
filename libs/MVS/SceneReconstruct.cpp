@@ -780,7 +780,9 @@ float computePlaneSphereAngle(const delaunay_t& Tr, const facet_t& facet)
 // and the surface is such extracted.
 
 
-void Scene::transformPCL2MVS(const std::string& filename, int useLidar){
+void Scene::transformPCL2MVS(const std::string& filename){
+
+        bool useLidar = (filename!="");
 
         PointCloud::PointArr pointsList;
         PointCloud::PointViewArr pViews;
@@ -846,12 +848,14 @@ void Scene::transformPCL2MVS(const std::string& filename, int useLidar){
 
         pointcloud.Release();
 }
-bool Scene::ReconstructMesh(int useLidar,float distInsert, bool bUseFreeSpaceSupport, unsigned nItersFixNonManifold,
+bool Scene::ReconstructMesh(std::string lidarFile, float distInsert, bool bUseFreeSpaceSupport, unsigned nItersFixNonManifold,
 							float kSigma, float kQual, float kb,
 							float kf, float kRel, float kAbs, float kOutl,
                             float kInf
 )
 {
+    bool useLidar = (lidarFile!="");
+
 	using namespace DELAUNAY;
 	ASSERT(!pointcloud.IsEmpty());
 
@@ -863,7 +867,7 @@ bool Scene::ReconstructMesh(int useLidar,float distInsert, bool bUseFreeSpaceSup
     }
 
     std::cout << useLidar << std::endl;
-    transformPCL2MVS("/home/VAmblard/Downloads/octomap_mvg_2.pcd", useLidar);
+    transformPCL2MVS(lidarFile);
 
 	mesh.Release();
 

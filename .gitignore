@@ -35,6 +35,7 @@
 *.cxx
 *.hxx
 *.c
+*Makefile
 *CMakeCache.txt
 CMakeFiles/
 .DS_Store

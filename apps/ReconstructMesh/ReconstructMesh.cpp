@@ -64,7 +64,7 @@ bool bRemoveSpikes;
 unsigned nCloseHoles;
 unsigned nSmoothMesh;
 unsigned nArchiveType;
-int iUseLidar;
+std::string iUseLidar;
 int nProcessPriority;
 unsigned nMaxThreads;
 String strExportType;
@@ -85,7 +85,7 @@ bool Initialize(size_t argc, LPCTSTR* argv)
 		("help,h", "produce this help message")
 		("working-folder,w", boost::program_options::value<std::string>(&WORKING_FOLDER), "working directory (default current directory)")
 		("config-file,c", boost::program_options::value<std::string>(&OPT::strConfigFileName)->default_value(APPNAME _T(".cfg")), "file name containing program options")
-        ("use-lidar,l",  boost::program_options::value<int>(&OPT::iUseLidar)->default_value(0), "If enabled will use lidar measurements")
+        ("use-lidar,l",  boost::program_options::value<std::string>(&OPT::iUseLidar)->default_value(""), "If enabled will use lidar measurements")
         ("export-type", boost::program_options::value<std::string>(&OPT::strExportType)->default_value(_T("ply")), "file type used to export the 3D scene (ply or obj)")
 		("archive-type", boost::program_options::value<unsigned>(&OPT::nArchiveType)->default_value(2), "project archive type: 0-text, 1-binary, 2-compressed binary")
 		("process-priority", boost::program_options::value<int>(&OPT::nProcessPriority)->default_value(-1), "process priority (below normal by default)")
@@ -268,7 +268,7 @@ int main(int argc, LPCTSTR* argv)
 					IndexArr points;
 					scene.SelectNeighborViews(idxImage, points);
 				}
-			}
+            }
 			#ifdef RECMESH_USE_OPENMP
 			if (bAbort)
 				return EXIT_FAILURE;

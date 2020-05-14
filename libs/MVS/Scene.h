@@ -90,10 +90,10 @@ public:
 	void DenseReconstructionFilter(void*);
 	void PointCloudFilter(int thRemove=-1);
 
-    void transformPCL2MVS(const std::string& filename, int useLidar);
+    void transformPCL2MVS(const std::string& filename);
 
     // Mesh reconstruction
-    bool ReconstructMesh(int useLidar, float distInsert=2, bool bUseFreeSpaceSupport=true, unsigned nItersFixNonManifold=4,
+    bool ReconstructMesh(std::string useLidar, float distInsert=2, bool bUseFreeSpaceSupport=true, unsigned nItersFixNonManifold=4,
 						 float kSigma=2.f, float kQual=1.f, float kb=4.f,
 						 float kf=3.f, float kRel=0.1f/*max 0.3*/, float kAbs=1000.f/*min 500*/, float kOutl=400.f/*max 700.f*/,
                          float kInf=(float)(INT_MAX/8));
