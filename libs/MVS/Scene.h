@@ -62,8 +62,8 @@ public:
 	unsigned nCalibratedImages; // number of valid images
 
 	unsigned nMaxThreads; // maximum number of threads used to distribute the work load
-    const float LIDAR = 1;
-    const float CAMERA = 0;
+    const float LIDAR_WEIGHT = 1;
+    const float CAMERA_WEIGHT = 0;
 public:
 	inline Scene(unsigned _nMaxThreads=0) : nMaxThreads(Thread::getMaxThreads(_nMaxThreads)) {}
 
