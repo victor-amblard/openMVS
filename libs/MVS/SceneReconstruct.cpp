@@ -828,7 +828,9 @@ void Scene::transformPCL2MVS(const std::string& filename, int useLidar){
                 pViews.Insert(defaultViewArr); //needs to be dobule checked
                 pSensors.Insert(LIDAR_WEIGHT);
                 ASSERT(it->nClustered!=0);
-                float actualVisibility = static_cast<float>(std::max(it->nClustered,500.f)/500); //Visibility bonus between 0 and 1
+                float actualVisibility(0);
+                if (it->nClustered!=0)
+                    actualVisibility = std::min(it->nClustered/100.f,1.f);//1-EXP(-(it->nClustered)/1000.f); //Visibility bonus between 0 and 1
                 vArr.Insert(actualVisibility);
             }
 
@@ -969,8 +971,7 @@ bool Scene::ReconstructMesh(int useLidar,float distInsert, bool bUseFreeSpaceSup
 					FOREACHPTR(pViewID, views) {
 						const Image& imageData = images[*pViewID];
                         const Point3f pn(imageData.camera.ProjectPointP3(point));
-                        const Point2f pnOnImage(imageData.camera.TransformPointW2I(static_cast<Point3>(point)));
-
+                        const Point2f pnOnImage(imageData.camera.TransformPointW2I(Point3(point)));
                         if ((sensor == LIDAR_WEIGHT) && (pnOnImage.x < 0 || pnOnImage.y < 0 || pnOnImage.x >= imageData.width || pnOnImage.y >= imageData.height || pn.z < 0))
                                 continue; //Remember that LiDAR has all views by default --> we only keep those which make sense
 
@@ -1023,34 +1024,33 @@ bool Scene::ReconstructMesh(int useLidar,float distInsert, bool bUseFreeSpaceSup
 
         const float BET = 16/32;
         const float GAM = 1/32;
-        const float ALPH = 32;
 
         if (useLidar){
             int countCam(0);
             int countLid(0);
 
             for (delaunay_t::Finite_facets_iterator fi=delaunay.finite_facets_begin(), eci=delaunay.finite_facets_end(); fi!=eci; ++fi) {
-                uint8_t mixed=0;
-                std::pair<cell_handle_t, int> facet = *fi;
 
+                std::pair<cell_handle_t, int> facet = *fi;
                 edge_cap_t& f(infoCells[facet.first->info()].f[facet.second]); //first = cell, second = idx
+                uint8_t fs = 0;
 
                 for(int j=0;j<3;++j){
                     uint8_t sensorOrigin = facet.first->vertex((facet.second+j+1)%3)->info().sensor;
-                    mixed = mixed >> sensorOrigin;
-                    //Lidar visibility bonus
-                    if (sensorOrigin == LIDAR_WEIGHT){
-                        f += ALPH * facet.first->vertex((facet.second+j+1)%3)->info().alphaVisLidar;
+
+                    fs += sensorOrigin;
+
+                    if (sensorOrigin == LIDAR_WEIGHT)
                         countLid++;
-                    }else{
+                    else
                         countCam++;
-                    }
+
                 }
-                //Lidar smoothing bonus
-                if(mixed==0 || mixed==7)
+                if(fs==0 || fs == 3)
                     f+=BET;
-                else
+                else //Mixed measurements
                     f+=GAM;
+
             }
             std::cout << "Currently "<<countCam << " camera points and "<< countLid << " lidar points" << std::endl;
         }
