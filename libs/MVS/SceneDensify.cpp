@@ -377,6 +377,90 @@ typedef kernel_t::Point_3 Point;
 
 // triangulate in-view points, generating a 2D mesh
 // return also the estimated depth boundaries (min and max depth)
+
+bool checkCameraLidarConsistency(const int x, const int y, const int w, const int h, const DepthMap& xCam){
+    const int neighbors(1);
+
+    int minX(MAXF(0, x-neighbors));
+    int minY(MAXF(0, y-neighbors));
+    int maxX(MINF(x+neighbors, w-1));
+    int maxY(MINF(y+neighbors, h-1));
+
+    for(auto iX=minX;iX<=maxX;++iX)
+        for (auto iY=minY;iY<=maxY;++iY)
+            if (!ISEQUAL(xCam(iY, iX), 0.f))
+                return false;
+
+    return true;
+
+}
+
+//We can't really do raytracing because we don't have any surface
+//Instead we do something simple and check whether the variance of the depth in the area
+//is above a threshold (meaning that we have a potential occlusion)
+// but we dont want to remove edges ==> we need to check variance in both directions
+
+bool checkLidarConsistency(const Point3& p, const int w, const int h, const DepthMap& xLid){
+    const int neighbors(5);
+
+    const float maxDiffDepth(0.1);
+
+    int minX(MAXF(0, int(p.x)-neighbors));
+    int minY(MAXF(0, int(p.y)-neighbors));
+    int maxX(MINF(int(p.x)+neighbors, w-1));
+    int maxY(MINF(int(p.y)+neighbors, h-1));
+
+    int count(0);
+    int countX(0);
+    int countY(0);
+    float avgX(0);
+    float avgY(0);
+    float avg(0);
+
+    for(auto iX=minX;iX<=maxX;++iX){
+        for (auto iY=minY;iY<=maxY;++iY){
+            if (!ISEQUAL(xLid(iY, iX), 0.f)){
+                ++count;
+                avg+=xLid(iY, iX);
+            }
+        }
+        if (count){
+            ++countY;
+            avg /= count;
+            avgY += avg;
+            avg=0;
+            count=0;
+        }
+    }
+
+    for(auto iY=minY;iY<=maxY;++iY){
+        for (auto iX=minX;iX<=maxX;++iX){
+            if (!ISEQUAL(xLid(iY, iX), 0.f)){
+                ++count;
+                avg +=xLid(iY, iX);
+            }
+        }
+        if (count){
+            ++countX;
+            avg /= count;
+            avgX += avg;
+            avg=0;
+            count=0;
+        }
+    }
+
+
+    if (!count)
+        return true;
+
+    avgX /= countX;
+    avgY /= countY;
+
+    if (xLid(p.y,p.x) > avgX+maxDiffDepth && xLid(p.y, p.x) > avgY + maxDiffDepth)
+        return false;
+
+    return true;
+}
 std::pair<float,float> TriangulatePointsDelaunay(CGAL::Delaunay& delaunay, const Scene& scene, const DepthData::ViewData& image, const IndexArr& points, LidarMap& lPoints, uint8_t options)
 {
     DEBUG_EXTRA("About to triangulate");
@@ -390,13 +474,17 @@ std::pair<float,float> TriangulatePointsDelaunay(CGAL::Delaunay& delaunay, const
     std::pair<float,float> depthBounds(FLT_MAX, 0.f);
     const float eps = 0.0000001f;
 
-    DepthMap xCam(HEIGHT, WIDTH);
+    const int imWidth(image.image.width());
+    const int imHeight(image.image.height());
+
+
+    DepthMap xCam(imHeight, imWidth);
     //We first add LIDAR points, then visual points
 
     if (options & useCamera){
 
-        for(auto x=0;x<WIDTH;++x)
-            for(auto y=0;y<HEIGHT;++y)
+        for(auto x=0;x<imWidth;++x)
+            for(auto y=0;y<imHeight;++y)
                 xCam(y,x)=0;
         for (uint32_t idx: points) {
             const Point3f pt(image.camera.ProjectPointP3(scene.pointcloud.points[idx]));
@@ -416,10 +504,11 @@ std::pair<float,float> TriangulatePointsDelaunay(CGAL::Delaunay& delaunay, const
     }
 
     if (options & useLidar){ //We assume that the LIDAR scan is aligned with the SfM cloud
-         DepthMap xLid(HEIGHT, WIDTH);
+         DepthMap xLid(imHeight, imWidth);
+         std::vector<Point3> candidatePoints;
 
-         for(auto x=0;x<WIDTH;++x)
-             for(auto y=0;y<HEIGHT;++y)
+         for(auto x=0;x<imWidth;++x)
+             for(auto y=0;y<imHeight;++y)
                  xLid(y,x)=0;
 
         for (auto it = lPoints->begin();it!=lPoints->end();){
@@ -429,14 +518,18 @@ std::pair<float,float> TriangulatePointsDelaunay(CGAL::Delaunay& delaunay, const
             int x(pt.x/pt.z);
             int y(pt.y/pt.z);
 
-            if (0 <= x && 0 <= y && x < image.image.width() && y < image.image.height()){
-                if (ISEQUAL(xCam(y, x),0.f)){ //We just want to make sure we are not poluting a visual feature (more accurate)
-                    delaunay.insert(CGAL::Point(x, y,pt.z));
-                    xLid(y,x) = pt.z;
-                    xCam(y,x) = pt.z;
+            if (0 <= x && 0 <= y && x <  imWidth && y < imHeight){
+                if (checkCameraLidarConsistency(x, y, imWidth, imHeight, xCam)){ //We just want to make sure we are not poluting a visual feature (more accurate)
+                    //We delay the delaunay insertion because we need to do some post-processing to prevent spurious points
+                    if (ISEQUAL(xLid(y,x),0.f) || pt.z < xLid(y,x)){
+                        candidatePoints.push_back(Point3(pt.x/pt.z,pt.y/pt.z,pt.z));
+                        xLid(y,x) = pt.z;
+                        xCam(y,x) = pt.z;
 
-                    depthBounds.first = MINF(depthBounds.first, pt.z);
-                    depthBounds.second = MAXF(depthBounds.second, pt.z);
+                        depthBounds.first = MINF(depthBounds.first, pt.z);
+                        depthBounds.second = MAXF(depthBounds.second, pt.z);
+                    }
+
 
                     ++it;
                 }else
@@ -446,6 +539,13 @@ std::pair<float,float> TriangulatePointsDelaunay(CGAL::Delaunay& delaunay, const
                 ++it;
             }
          }
+
+        for (Point3 curPoint: candidatePoints)
+            if (checkLidarConsistency(curPoint, imWidth, imHeight, xLid))
+                delaunay.insert(CGAL::Point(curPoint.x, curPoint.y, curPoint.z));
+            else
+                xCam(int(curPoint.y), int(curPoint.x)) = 0; //Just for visualization purposes
+
          const Image8U3& im(image.pImageData->image);
          VERBOSE("%f, %f", depthBounds.first, depthBounds.second);
          ExportOverlayedImage(ComposeDepthFilePath(image.GetID(), "raw_lidar_points.png"), im, xCam, depthBounds.first, depthBounds.second, false);

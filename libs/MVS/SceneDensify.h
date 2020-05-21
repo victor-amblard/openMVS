@@ -57,8 +57,6 @@ struct MVS_API gpsCoords{
  	 	Eigen::Matrix4f mSE3;
  	 	octomath::Pose6D p6D;
   };
-const int WIDTH = 1024;
-const int HEIGHT = 768;
 
 class MVS_API Scene;
 	
