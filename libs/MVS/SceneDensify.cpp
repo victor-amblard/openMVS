@@ -415,7 +415,7 @@ std::pair<float,float> TriangulatePointsDelaunay(CGAL::Delaunay& delaunay, const
 
     }
 
-    if (options & useLidar){
+    if (options & useLidar){ //We assume that the LIDAR scan is aligned with the SfM cloud
          DepthMap xLid(HEIGHT, WIDTH);
 
          for(auto x=0;x<WIDTH;++x)
@@ -423,16 +423,20 @@ std::pair<float,float> TriangulatePointsDelaunay(CGAL::Delaunay& delaunay, const
                  xLid(y,x)=0;
 
         for (auto it = lPoints->begin();it!=lPoints->end();){
-            const Point2f pt(image.camera.TransformPointC2I(Point3d(it->x, it->y, it->z)));
+            if (ISEQUAL(it->z, 0.f))
+                continue;
+            const Point3f pt(image.camera.ProjectPointP3(Point3d(it->x, it->y, it->z)));
+            int x(pt.x/pt.z);
+            int y(pt.y/pt.z);
 
-            if (0 <= pt.x && 0 <= pt.y && pt.x < image.image.width() && pt.y< image.image.height() && it->z > eps){
-                if (ISEQUAL(xCam(pt.y, pt.x),0.f)){ //We just want to make sure we are not poluting a visual feature (more accurate)
-                    delaunay.insert(CGAL::Point(pt.x, pt.y,it->z));
-                    xLid(pt.y,pt.x) = it->z;
-                    xCam(pt.y, pt.x) = it->z;
+            if (0 <= x && 0 <= y && x < image.image.width() && y < image.image.height()){
+                if (ISEQUAL(xCam(y, x),0.f)){ //We just want to make sure we are not poluting a visual feature (more accurate)
+                    delaunay.insert(CGAL::Point(x, y,pt.z));
+                    xLid(y,x) = pt.z;
+                    xCam(y,x) = pt.z;
 
-                    depthBounds.first = MINF(depthBounds.first, it->z);
-                    depthBounds.second = MAXF(depthBounds.second, it->z);
+                    depthBounds.first = MINF(depthBounds.first, pt.z);
+                    depthBounds.second = MAXF(depthBounds.second, pt.z);
 
                     ++it;
                 }else
@@ -532,7 +536,9 @@ bool DepthMapsData::InitDepthMap(DepthData& depthData)
     CGAL::Delaunay delaunay, delaunayCamera, delaunayLidar;
 
     if(!dualMaps){
-        useLC = (1 << 0);// | (1 << 1);
+        useLC = (1 << 0);
+        if (depthData.lScan!=nullptr)
+            useLC |= (1 << 1);
         const std::pair<float,float> thDepth(TriangulatePointsDelaunay(delaunay, scene, image, depthData.points, depthData.lScan, useLC));
         depthData.dMin = thDepth.first*0.9f;
         depthData.dMax = thDepth.second*1.1f;
@@ -1937,7 +1943,6 @@ void Scene::DenseReconstructionEstimate(void* pData)
                 break;
             }
             VERBOSE("ADD LIDAR DATA for image %u", idx);
-//            LidarMap& lmap = depthData.lScan;
             depthData.lScan = lidarCloud;
 
             // try to load already compute depth-map for this image

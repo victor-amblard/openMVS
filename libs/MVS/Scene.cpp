@@ -198,7 +198,7 @@ bool Scene::LoadLidarScan(const String & fileName){
     if (success == -1){
         VERBOSE("Failed to open PCD file");
     }
-    DEBUG_EXTRA("LIDAR point cloud loaded from file: %s, with %u points", fileName, lidarCloud->points.size());
+    DEBUG_EXTRA("LIDAR point cloud loaded from file: %s , with %u points", fileName.c_str(), lidarCloud->points.size());
 
    return (success!=-1);
 
