@@ -59,79 +59,7 @@ struct MVS_API gpsCoords{
   };
 const int WIDTH = 1024;
 const int HEIGHT = 768;
-/*
- * Raw sequence
-const Eigen::Matrix4f transformImuLidar((Eigen::Matrix4f() << 9.999976e-01, 7.553071e-04 ,-2.035826e-03 , -8.086759e-01,
-                                          -7.854027e-04 , 9.998898e-01, -1.482298e-02 , 3.195559e-01,
-                                          2.024406e-03,  1.482454e-02,  9.998881e-01 , -7.997231e-01,
-                                           0, 0 ,0,1).finished());
 
-const Eigen::Matrix4f transformLidarCam((Eigen::Matrix4f() << 7.533745e-03, -9.999714e-01, -6.166020e-04, -4.069766e-03 ,
-                                          1.480249e-02, 7.280733e-04, -9.998902e-01, -7.631618e-02,
-                                          9.998621e-01, 7.523790e-03, 1.480755e-02,  -2.717806e-01,0, 0, 0, 1).finished());
-
-const Eigen::Matrix4f R_rect_0((Eigen::Matrix4f() << 9.999239e-01, 9.837760e-03, -7.445048e-03,0,
-                                 -9.869795e-03, 9.999421e-01, -4.278459e-03,0,
-                                 7.402527e-03, 4.351614e-03, 9.999631e-01,0,
-                                 0, 0 ,0, 1).finished());
-
-const Eigen::Matrix4f R_rect_2((Eigen::Matrix4f() <<  9.998817e-01, 1.511453e-02, -2.841595e-03,0,
-                                                     -1.511724e-02, 9.998853e-01, -9.338510e-04,0,
-                                                      2.827154e-03, 9.766976e-04, 9.999955e-01,0,
-                                 0, 0 ,0, 1).finished());
-
-const Eigen::Matrix4f T_cam0_cam2((Eigen::Matrix4f() <<9.999758e-01, -5.267463e-03, -4.552439e-03 ,5.956621e-02,
-                                                        5.251945e-03,9.999804e-01, -3.413835e-03,2.900141e-04,
-                                                        4.570332e-03, 3.389843e-03, 9.999838e-01,2.577209e-03,
-                                                            0,0,0,1).finished());
-
-
-const Eigen::Matrix<float,4,4> R_rect_02((Eigen::Matrix<float,4,4>() << 1,0,0,0.062169,
-                                                                        0,1,0,0,
-                                                                        0,0,1,0,
-                                                                        0,0,0,1).finished());
-
-const Eigen::Matrix<float,4,4> P_rect_2((Eigen::Matrix<float,4,4>() << 7.215377e+02, 0.000000e+00, 6.095593e+02, 4.485728e+01,
-                                           0.000000e+00, 7.215377e+02, 1.728540e+02, 2.163791e-01,
-                                            0.000000e+00, 0.000000e+00, 1.000000e+00, 2.745884e-03,
-
-*/
-//Sequence 07 odometry
-
-
-/*const Eigen::Matrix4f transformLidarCam((Eigen::Matrix4f() << -1.857739385241e-03, -9.999659513510e-01, -8.039975204516e-03,-4.784029760483e-03,
-                                                              -6.481465826011e-03, 8.051860151134e-03, -9.999466081774e-01, -7.337429464231e-02,
-                                                                9.999773098287e-01, -1.805528627661e-03, -6.496203536139e-03, -3.339968064433e-01,
-                                                                0, 0, 0, 1).finished());
-*/
-const Eigen::Matrix4f transformChassis2Lidar((Eigen::Matrix4f() << 1, 0, 0,0.277,
-                                                                0, 1, 0, 0,
-                                                                0, 0, 1, 0.125,
-                                                                0, 0, 0, 1).finished());
-const Eigen::Matrix4f transformLink2Chassis((Eigen::Matrix4f() << 1, 0, 0,0,
-                                                                0, 1, 0, 0,
-                                                                0, 0, 1, 0.015,
-                                                                0, 0, 0, 1).finished());
-const Eigen::Matrix4f transformLink2ZedCenter((Eigen::Matrix4f() << 1, 0, 0,0.255,
-                                                                0, 1, 0, 0,
-                                                                0, 0, 1, 0.18,
-                                                                0, 0, 0, 1).finished());
-const Eigen::Matrix4f transformZedCenter2LeftFrame((Eigen::Matrix4f() << 1, 0, 0,0,
-                                                                0, 1, 0, 0.06,
-                                                                0, 0, 1, 0,
-                                                                0, 0, 0, 1).finished());
-const Eigen::Matrix4f transformLeftFrame2LeftOptical((Eigen::Matrix4f() << 0, 0, 1,0,
-                                                                -1, 0, 0, 0,
-                                                                0, -1, 0, 0,
-                                                                0, 0, 0, 1).finished());
-const Eigen::Matrix4f axisCorrection((Eigen::Matrix4f() << 0, 0, 1, 0,
-                                                            -1,0, 0 ,0,
-                                                            0,-1,0,0,
-                                                            0,0,0,1).finished());
-const Eigen::Matrix4f newerCollegeDatasetLidar2Cam((Eigen::Matrix4f() <<  -0.709922 ,   0.704142 ,  0.0139927,   0.0032964,
-                                                    -0.0246, -0.00493623 ,  -0.999685,  -0.0484382,
-                                                  -0.703851 ,  -0.710042 ,  0.0208262,  -0.0708876,
-                                                         -0  ,         0   ,       -0    ,      1).finished());
 class MVS_API Scene;
 	
 // structure used to compute all depth-maps
@@ -147,23 +75,8 @@ public:
 	bool InitDepthMap(DepthData& depthData);
 	bool EstimateDepthMap(IIndex idxImage);
 	
-    void addLidarData(const int& idx);
-    void loadAllLidar();
-    PointCloudXYZ::Ptr readLidarPcl(const int& idx);
-    gpsCoords readIMUFile(const std::string& filename);
 	Eigen::Matrix4f getRelativeTransform(const gpsCoords& curPose, const float& scale, Eigen::Matrix4f *Tr_0_inv);
-	std::vector<LidarMap> backProjectLidarPoints(const std::vector<pcl::PointCloud<pcl::PointXYZ>::Ptr>& all_pl,
-                                         				const std::vector<Eigen::Matrix4f>& transforms);
-	std::vector<relTransform> getTransformIMU(const std::vector<gpsCoords>& imu_poses);
-    void mergeLidarPoints(PointCloudXYZ::Ptr nCloud);
-    pcl::PointCloud<pcl::XPointXYZ> checkDepthMaps(pcl::PointCloud<pcl::XPointXYZ> regPl);
 
-    void ProjectLidarWorld(PointCloudXYZ::Ptr Pl, PointCloudXYZ::Ptr nPl, const int& idx);
-
-
-    pcl::PointCloud<pcl::XPointXYZ> downsamplePcl(PointCloudXYZ::Ptr cloud, const float& leafSize);
-    pcl::PointCloud<pcl::PointXYZ>::Ptr downsamplePcl2(PointCloudXYZ::Ptr cloud,
-                                                  const float& leafSize);
     void testDensityPointCloud(pcl::PointCloud<pcl::XPointXYZ> pCloud);
 	bool RemoveSmallSegments(DepthData& depthData);
 	bool GapInterpolation(DepthData& depthData);

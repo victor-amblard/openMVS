@@ -52,7 +52,7 @@ float fSampleMesh;
 int thFilterPointCloud;
 int nArchiveType;
 int nProcessPriority;
-int iUseLidar;
+String iUseLidar;
 unsigned nMaxThreads;
 String strConfigFileName;
 boost::program_options::variables_map vm;
@@ -71,7 +71,7 @@ bool Initialize(size_t argc, LPCTSTR* argv)
 		("help,h", "produce this help message")
 		("working-folder,w", boost::program_options::value<std::string>(&WORKING_FOLDER), "working directory (default current directory)")
 		("config-file,c", boost::program_options::value<std::string>(&OPT::strConfigFileName)->default_value(APPNAME _T(".cfg")), "file name containing program options")
-        ("use-lidar,l",  boost::program_options::value<int>(&OPT::iUseLidar)->default_value(0), "If enabled will use lidar measurements")
+        ("use-lidar,l",  boost::program_options::value<std::string>(&OPT::iUseLidar)->default_value(""), "If enabled will use lidar measurements")
 		("archive-type", boost::program_options::value(&OPT::nArchiveType)->default_value(2), "project archive type: 0-text, 1-binary, 2-compressed binary")
 		("process-priority", boost::program_options::value(&OPT::nProcessPriority)->default_value(-1), "process priority (below normal by default)")
 		("max-threads", boost::program_options::value(&OPT::nMaxThreads)->default_value(0), "maximum number of threads (0 for using all available cores)")
@@ -256,6 +256,10 @@ int main(int argc, LPCTSTR* argv)
 		Finalize();
 		return EXIT_SUCCESS;
 	}
+    if (OPT::iUseLidar != ""){
+        if (!scene.LoadLidarScan(OPT::iUseLidar))
+            return EXIT_FAILURE;
+    }
 	if ((ARCHIVE_TYPE)OPT::nArchiveType != ARCHIVE_MVS) {
 		TD_TIMER_START();
 		if (!scene.DenseReconstruction())

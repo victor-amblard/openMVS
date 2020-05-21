@@ -192,6 +192,17 @@ bool Scene::LoadInterface(const String & fileName)
 	return true;
 } // LoadInterface
 
+bool Scene::LoadLidarScan(const String & fileName){
+   lidarCloud = static_cast<pcl::PointCloud<pcl::PointXYZ>::Ptr>(new pcl::PointCloud<pcl::PointXYZ>);
+   int success = pcl::io::loadPCDFile<pcl::PointXYZ>(fileName, *lidarCloud);
+    if (success == -1){
+        VERBOSE("Failed to open PCD file");
+    }
+    DEBUG_EXTRA("LIDAR point cloud loaded from file: %s, with %u points", fileName, lidarCloud->points.size());
+
+   return (success!=-1);
+
+}
 bool Scene::SaveInterface(const String & fileName) const
 {
 	TD_TIMER_STARTD();

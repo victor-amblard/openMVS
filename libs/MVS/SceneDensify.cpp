@@ -377,18 +377,23 @@ typedef kernel_t::Point_3 Point;
 
 // triangulate in-view points, generating a 2D mesh
 // return also the estimated depth boundaries (min and max depth)
-std::pair<float,float> TriangulatePointsDelaunay(CGAL::Delaunay& delaunay, const Scene& scene, const DepthData::ViewData& image, const IndexArr& points, LidarMap& lPoints, uint8_t useLidar)
+std::pair<float,float> TriangulatePointsDelaunay(CGAL::Delaunay& delaunay, const Scene& scene, const DepthData::ViewData& image, const IndexArr& points, LidarMap& lPoints, uint8_t options)
 {
     DEBUG_EXTRA("About to triangulate");
 
     ASSERT(sizeof(Point3) == sizeof(X3D));
     ASSERT(sizeof(Point3) == sizeof(CGAL::Point));
 
+    uint8_t useLidar = 1 << 1;
+    uint8_t useCamera = 1 << 0;
 
     std::pair<float,float> depthBounds(FLT_MAX, 0.f);
     const float eps = 0.0000001f;
+
     DepthMap xCam(HEIGHT, WIDTH);
-    if (useLidar & (1 << 0)){
+    //We first add LIDAR points, then visual points
+
+    if (options & useCamera){
 
         for(auto x=0;x<WIDTH;++x)
             for(auto y=0;y<HEIGHT;++y)
@@ -401,18 +406,16 @@ std::pair<float,float> TriangulatePointsDelaunay(CGAL::Delaunay& delaunay, const
             y = int(pt.y/pt.z);
            xCam(y,x)=pt.z;
 
-            if (depthBounds.first > pt.z)
-                depthBounds.first = pt.z;
-            if (depthBounds.second < pt.z)
-                depthBounds.second = pt.z;
+           depthBounds.first = MINF(depthBounds.first, pt.z);
+           depthBounds.second = MAXF(depthBounds.second, pt.z);
+
             }
         const Image8U3& im(image.pImageData->image);
         ExportOverlayedImage(ComposeDepthFilePath(image.GetID(), "raw_camera_points.png"), im, xCam, depthBounds.first, depthBounds.second, true);
 
     }
 
-    if (useLidar & (1 << 1)){
-        VERBOSE("Using LiDAR for depth map initialization!");
+    if (options & useLidar){
          DepthMap xLid(HEIGHT, WIDTH);
 
          for(auto x=0;x<WIDTH;++x)
@@ -422,30 +425,29 @@ std::pair<float,float> TriangulatePointsDelaunay(CGAL::Delaunay& delaunay, const
         for (auto it = lPoints->begin();it!=lPoints->end();){
             const Point2f pt(image.camera.TransformPointC2I(Point3d(it->x, it->y, it->z)));
 
-            auto scaledZ = it->z;
-
             if (0 <= pt.x && 0 <= pt.y && pt.x < image.image.width() && pt.y< image.image.height() && it->z > eps){
                 if (ISEQUAL(xCam(pt.y, pt.x),0.f)){ //We just want to make sure we are not poluting a visual feature (more accurate)
-                    delaunay.insert(CGAL::Point(pt.x, pt.y, it->z));
-                    xLid(pt.y,pt.x)=scaledZ;
-                    xCam(pt.y, pt.x)=scaledZ;
-                    if (depthBounds.first > scaledZ)
-                        depthBounds.first = scaledZ;
-                    if (depthBounds.second < scaledZ)
-                        depthBounds.second = scaledZ;
+                    delaunay.insert(CGAL::Point(pt.x, pt.y,it->z));
+                    xLid(pt.y,pt.x) = it->z;
+                    xCam(pt.y, pt.x) = it->z;
+
+                    depthBounds.first = MINF(depthBounds.first, it->z);
+                    depthBounds.second = MAXF(depthBounds.second, it->z);
+
                     ++it;
-                }else{
+                }else
                     it = lPoints->erase(it);
-                }
+
                }else{
                 ++it;
             }
-            }
+         }
          const Image8U3& im(image.pImageData->image);
          VERBOSE("%f, %f", depthBounds.first, depthBounds.second);
          ExportOverlayedImage(ComposeDepthFilePath(image.GetID(), "raw_lidar_points.png"), im, xCam, depthBounds.first, depthBounds.second, false);
 
     }
+
 
     // if full size depth-map requested
     if (OPTDENSE::bAddCorners) {
@@ -530,7 +532,7 @@ bool DepthMapsData::InitDepthMap(DepthData& depthData)
     CGAL::Delaunay delaunay, delaunayCamera, delaunayLidar;
 
     if(!dualMaps){
-        useLC = (1 << 0) | (1 << 1);
+        useLC = (1 << 0);// | (1 << 1);
         const std::pair<float,float> thDepth(TriangulatePointsDelaunay(delaunay, scene, image, depthData.points, depthData.lScan, useLC));
         depthData.dMin = thDepth.first*0.9f;
         depthData.dMax = thDepth.second*1.1f;
@@ -761,174 +763,6 @@ void* STCALL DepthMapsData::EndDepthMapTmp(void* arg)
         }
     }
     return NULL;
-}
-
-void DepthMapsData::mergeLidarPoints(PointCloudXYZ::Ptr nCloud){
-
-    for(auto idx=0;idx<arrDepthData.size();++idx){
-
-        const DepthData& depthData(arrDepthData[idx]);
-        if (!depthData.IsEmpty()){
-            const LidarMap& curLid(depthData.lScan);
-            DEBUG_EXTRA("Current loop %u, Lidar point cloud contains %u points", idx, curLid->points.size());
-
-            const Camera& camera(depthData.images.First().camera);
-
-            for(auto it=curLid->begin();it!=curLid->end();++it){
-                Point3f wPoint = camera.TransformPointC2W(Point3(it->x, it->y, it->z));
-                if (it->z < 0)
-                    continue;
-                (*nCloud).push_back(pcl::PointXYZ(wPoint.x, wPoint.y, wPoint.z));
-            }
-        }
-    }
-}
-
-pcl::PointCloud<pcl::XPointXYZ> DepthMapsData::checkDepthMaps(pcl::PointCloud<pcl::XPointXYZ> regPl){
-
-   const int initSize = regPl.points.size();
-   const float EPS = 0.1f;
-   for(auto it=regPl.begin();it!=regPl.end();){
-
-       Point3 curPoint(float(it->x), float(it->y), float(it->z));
-       bool valid = true;
-
-       for(auto idx = 0 ;idx < arrDepthData.size();++idx){
-            const DepthData& depthData(arrDepthData[idx]);
-            if (!depthData.IsEmpty()){
-                const Camera& camera(depthData.images.First().camera);
-
-                Point2f pointOnImage = camera.TransformPointW2I(curPoint);
-                Point2i iPointImage(int(pointOnImage.x), int(pointOnImage.y));
-
-                if(depthData.depthMap.isInside(iPointImage))
-                    if(depthData.depthMap(iPointImage.y, iPointImage.x) > EPS) //We don't want to conflict with camera depth estimates
-                        valid=false;
-            }
-       }
-       if(!valid)
-         it = regPl.erase(it);
-       else
-         ++it;
-   }
-
-   DEBUG_EXTRA("%u points have been removed from point cloud!", regPl.points.size() - initSize);
-    return regPl;
-}
-void DepthMapsData::loadAllLidar(){
-
-    PointCloudXYZ::Ptr registeredPl(new PointCloudXYZ);
-    mergeLidarPoints(registeredPl);
-    std::cout << "Point cloud before downsampling: " << registeredPl->points.size() << std::endl;
-    //Todo: Do it with pointers...
-    pcl::PointCloud<pcl::XPointXYZ> finalPCL= downsamplePcl(registeredPl, 0.04f);
-    VERBOSE("Point cloud size %u", finalPCL.points.size());
-    pcl::io::savePCDFile("/home/victor/Data/Stages/MIT/dataset_covid_appart/exp6/scene_densify_lidar.pcd", finalPCL);
-
-
-}
-void DepthMapsData::addLidarData(const int& curIdx){
-
-    PointCloudXYZ::Ptr curPCL = readLidarPcl(curIdx);
-//    PointCloudXYZ::Ptr curPCLDown = downsamplePcl2(curPCL, 0.02f);
-    DepthData& depthData(arrDepthData[curIdx]);
-    LidarMap allLidarDepths(new PointCloudXYZ);
-    ProjectLidarWorld(curPCL,allLidarDepths, curIdx);
-    LidarMap& lmap = depthData.lScan;
-    lmap = allLidarDepths;
-
-}
-
-void DepthMapsData::ProjectLidarWorld(PointCloudXYZ::Ptr Pl, PointCloudXYZ::Ptr nPl, const int& idx){
-    /*
-    DepthData& depthData(arrDepthData[idx]);
-
-    const DepthData::ViewData& image(depthData.images.First());
-    const Camera& camera = image.camera;
-
-    const RMatrix& rot = camera.R.t();
-    const CMatrix& c = camera.C;
-
-    Eigen::Matrix4f transform;
-    transform << rot[0*3+0], rot[0*3+1], rot[0*3+2], c.x,
-                rot[1*3+0], rot[1*3+1], rot[1*3+2], c.y,
-                rot[2*3+0], rot[2*3+2], rot[2*3+2], c.z,
-                0,0,0,1;
-    */
-    const DepthData& depthData(arrDepthData[idx]);
-    const Camera& camera(depthData.images.First().camera);
-     const Eigen::Matrix4f transform = transformLeftFrame2LeftOptical.inverse()*transformZedCenter2LeftFrame.inverse()*transformLink2ZedCenter*
-            transformLink2Chassis.inverse()*transformChassis2Lidar.inverse();
-
-    pcl::transformPointCloud(*Pl, *nPl,  newerCollegeDatasetLidar2Cam );
-}
-PointCloudXYZ::Ptr DepthMapsData::readLidarPcl(const int& curIdx){
-
-
-     const std::string WORK_DIR = "/home/victor/Data/Stages/MIT/newer_college_dataset/subset/ouster_scan/";
-//    const std::string WORK_DIR = "/home/victor/Data/Stages/MIT/2011_09_26_drive_0046_sync";
-     const std::string VELODYNE_DIR = WORK_DIR + "/test/";
-//    const std::string VELODYNE_DIR = WORK_DIR + "/velodyne_points/data/";
-    const std::string PCL_FILENAME_EXTENSION = ".pcd";
-
-    std::stringstream ss;
-    ss << std::setw (4) << std::setfill('0') << curIdx;
-    std::string filename = VELODYNE_DIR + ss.str() + PCL_FILENAME_EXTENSION;
-
-    pcl::PointCloud<pcl::PointXYZ>::Ptr all_clouds;
-    pcl::PointCloud<pcl::PointXYZ>::Ptr tmp_cloud(new pcl::PointCloud<pcl::PointXYZ>);
-
-   int success = pcl::io::loadPCDFile<pcl::PointXYZ>(filename, *tmp_cloud); // !!! WARNING
-    if (success == -1){
-        VERBOSE("Failed to open PCD file");
-    }
-    std::cout << tmp_cloud->points.size() << std::endl;
-    return tmp_cloud;
-
-}
-
-pcl::PointCloud<pcl::PointXYZ>::Ptr DepthMapsData::downsamplePcl2(PointCloudXYZ::Ptr cloud,
-                                              const float& leafSize){
-
-    pcl::VoxelGrid<pcl::PointXYZ> vg;
-    pcl::PointCloud<pcl::PointXYZ>::Ptr cloudFiltered (new pcl::PointCloud<pcl::PointXYZ>);
-    vg.setInputCloud (cloud);
-    vg.setLeafSize (leafSize, leafSize, leafSize);
-    vg.filter (*cloudFiltered);
-
-    return cloudFiltered;
-}
-pcl::PointCloud<pcl::XPointXYZ> DepthMapsData::downsamplePcl(PointCloudXYZ::Ptr cloud,
-                                              const float& leafSize){
-
-    pcl::VoxelGrid<pcl::PointXYZ> vg;
-    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_filtered (new pcl::PointCloud<pcl::PointXYZ>);
-    vg.setInputCloud (cloud);
-    vg.setLeafSize (leafSize, leafSize, leafSize);
-    vg.filter (*cloud_filtered);
-
-    pcl::octree::OctreePointCloudDensity<pcl::PointXYZ> octreeA (leafSize);
-    octreeA.setInputCloud(cloud_filtered);
-    octreeA.addPointsFromInputCloud ();
-
-    pcl::PointCloud<pcl::XPointXYZ> rCloud;
-
-
-    for(auto it = cloud_filtered->begin();it!=cloud_filtered->end();++it){
-        pcl::PointXYZ p(it->x, it->y, it->z);
-        int nClustered = octreeA.getVoxelDensityAtPoint(p);
-        std::cout << nClustered << std::endl;
-        float nC=static_cast<float>(nClustered);
-        pcl::XPointXYZ xP;
-        xP.x = it->x;
-        xP.y = it->y;
-        xP.z = it->z;
-        xP.nClustered = nC;
-        ASSERT(nC!=0);
-        rCloud.push_back(xP);
-    }
-
-    return rCloud;
 }
 
 Eigen::Vector3f getColorMap(const float& f){
@@ -2103,7 +1937,9 @@ void Scene::DenseReconstructionEstimate(void* pData)
                 break;
             }
             VERBOSE("ADD LIDAR DATA for image %u", idx);
-            data.depthMaps.addLidarData(idx);
+//            LidarMap& lmap = depthData.lScan;
+            depthData.lScan = lidarCloud;
+
             // try to load already compute depth-map for this image
             if (File::access(ComposeDepthFilePath(depthData.GetView().GetID(), "dmap"))) {
                 if (OPTDENSE::nOptimize & OPTDENSE::OPTIMIZE) {
