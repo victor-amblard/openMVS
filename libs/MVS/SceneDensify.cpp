@@ -37,6 +37,8 @@
 #include <CGAL/Simple_cartesian.h>
 #include <CGAL/Delaunay_triangulation_2.h>
 #include <CGAL/Projection_traits_xy_3.h>
+#include <CGAL/Exact_predicates_exact_constructions_kernel.h>
+#include <CGAL/intersections.h>
 
 using namespace MVS;
 
@@ -461,6 +463,35 @@ bool checkLidarConsistency(const Point3& p, const int w, const int h, const Dept
 
     return true;
 }
+bool isInsidePlane(const Point3& pt){
+    return true;
+}
+//Plane is an array (a,b,c,d) ax+by+cz+d=0
+typedef CGAL::Exact_predicates_exact_constructions_kernel CGAL_K;
+
+template <typename TYPE>
+inline CGAL_K::Point_3 MVS2CGAL(const TPoint3<TYPE>& p) {
+    return CGAL_K::Point_3((CGAL_K::RT)p.x, (CGAL_K::RT)p.y, (CGAL_K::RT)p.z);
+}
+std::pair<bool, double> getApproxDepthFromPlane(const Point2& pt, const CGAL_K::Plane_3& curPlane, const Camera& cam){
+
+   const Point3 pixelDir(cam.RayPoint(pt));
+   const CGAL_K::Ray_3 curRay(MVS2CGAL<REAL>(cam.C), CGAL_K::Direction_3(pixelDir.x, pixelDir.y, pixelDir.z));
+
+    auto result = CGAL::intersection(curPlane, curRay);
+    if (result){
+        if (const CGAL_K::Point_3* p = boost::get<CGAL_K::Point_3>(&*result)){
+            const Point3& ptOnPlane = Point3(CGAL::to_double(p->x()), CGAL::to_double(p->y()), CGAL::to_double(p->z()));
+            double depth(cam.ProjectPointP3(Point3(ptOnPlane)).z);
+            return std::make_pair(true, depth);
+        }else{
+            const CGAL_K::Ray_3* r = boost::get<CGAL_K::Ray_3>(&*result);
+            std::cout << r << std::endl;
+            return std::make_pair(false, 0);
+        }
+    }
+
+}
 std::pair<float,float> TriangulatePointsDelaunay(CGAL::Delaunay& delaunay, const Scene& scene, const DepthData::ViewData& image, const IndexArr& points, LidarMap& lPoints, uint8_t options)
 {
     DEBUG_EXTRA("About to triangulate");
@@ -468,6 +499,7 @@ std::pair<float,float> TriangulatePointsDelaunay(CGAL::Delaunay& delaunay, const
     ASSERT(sizeof(Point3) == sizeof(X3D));
     ASSERT(sizeof(Point3) == sizeof(CGAL::Point));
 
+    uint8_t usePlanes = 1 << 2; //TODO: Add options in command line args
     uint8_t useLidar = 1 << 1;
     uint8_t useCamera = 1 << 0;
 
@@ -539,6 +571,22 @@ std::pair<float,float> TriangulatePointsDelaunay(CGAL::Delaunay& delaunay, const
                 ++it;
             }
          }
+
+        if (options & usePlanes){
+            const int gridSize(4);
+            for(int iX=0;iX<imWidth;iX += gridSize){
+                for(int iY = 0 ; iY < imHeight; iY += gridSize){
+                    const Point2& curPxl = Point2(double(iX), double(iY));
+                    const CGAL_K::Plane_3 curPlane; //TODO load planes
+                    auto resultPlaneDepth = getApproxDepthFromPlane(curPxl, curPlane, image.camera);
+                    if (resultPlaneDepth.first){
+                        Point3d nP(image.camera.ProjectPointP3(Point3(double(iX), double(iY), resultPlaneDepth.second)));
+                        candidatePoints.push_back(Point3(nP.x/nP.z, nP.y/nP.z, nP.z));
+                    }
+                }
+            }
+        }
+
 
         for (Point3 curPoint: candidatePoints)
             if (checkLidarConsistency(curPoint, imWidth, imHeight, xLid))
