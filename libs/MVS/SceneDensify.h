@@ -59,7 +59,51 @@ struct MVS_API gpsCoords{
   };
 
 class MVS_API Scene;
-	
+
+struct MyPlane{
+	Point3 corners[4];
+};
+
+class MyLine{
+    public:
+        Eigen::Matrix4d pluckerMatrix;
+        Eigen::Matrix<double,6,1> pluckerVector;
+
+        Eigen::Vector3d getProjection(const Eigen::Matrix4d & projMat) const;
+
+        MyLine(const Eigen::Vector3d pA, const Eigen::Vector3d pB){
+            Eigen::Vector4d A = pA.homogeneous();
+            Eigen::Vector4d B = pB.homogeneous();
+
+            pluckerMatrix = A*B.transpose()-B*A.transpose();
+            setVectorFromMatrix();
+
+        }
+		MyLine(const Point3& pA, const Point3& pB):MyLine(Eigen::Vector3d(pA.x,pA.y,pA.z), Eigen::Vector3d(pB.x, pB.y, pB.z)){}
+    private:
+        void setMatrixFromVector(void){
+            pluckerMatrix = Eigen::Matrix4d::Zero();
+            for(size_t i=1;i<4;++i){
+                pluckerMatrix(i,0) = pluckerVector(i-1);
+            }
+            pluckerMatrix(2,1) = pluckerVector(3);
+            pluckerMatrix(3,1) = pluckerVector(4);
+            pluckerMatrix(3,2) = pluckerVector(5);
+
+            for(size_t i=0;i<4;++i)
+                for(size_t j=i;j<4;++j)
+                    pluckerMatrix(i,j) = -pluckerMatrix(j,i);
+        }
+        void setVectorFromMatrix(void){
+            pluckerVector(0) = pluckerMatrix(1,0);
+            pluckerVector(1) = pluckerMatrix(2,0);
+            pluckerVector(2) = pluckerMatrix(3,0);
+            pluckerVector(3) = pluckerMatrix(2,1);
+            pluckerVector(4) = pluckerMatrix(3,1);
+            pluckerVector(5) = pluckerMatrix(3,2);
+        }
+    };
+
 // structure used to compute all depth-maps
 class MVS_API DepthMapsData
 {
