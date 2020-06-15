@@ -524,6 +524,9 @@ bool isPlaneInsideImg(MyPlane plane, const DepthData::ViewData& image, CGAL_K::P
             visibility[iLine] = false;
         }
     }
+    
+    std::cerr << nVis << " corners in view" << std::endl;
+
     if (!nVis)
         return false;
 
@@ -552,18 +555,20 @@ bool isPlaneInsideImg(MyPlane plane, const DepthData::ViewData& image, CGAL_K::P
 
             Point3 projNVisible = image.camera.ProjectPointP3(plane.corners[notVisible]);
             CGAL_K::Ray_2 curRay;
+
             if (projNVisible.z >= 0){
                 curRay = CGAL_K::Ray_2(MVS2CGAL2<REAL>(image.camera.ProjectPointP(plane.corners[iVisible])), MVS2CGAL2<REAL>(Point2(projNVisible.x/projNVisible.z, projNVisible.y/projNVisible.z)) );
             }else{
                 std::cerr << "Not implemented!!!" << std::endl;
             }
-            auto resultInter = CGAL::intersection(curRay, imageBounds);
+            auto resultInter = CGAL::intersection(imageBounds, curRay);
+
             if (resultInter){
                 if (const CGAL_K::Point_2* p = boost::get<CGAL_K::Point_2>(&*resultInter)){
                     pointsPolygon[notVisible] = *p;
                 }else{
                     const CGAL_K::Segment_2* r = boost::get<CGAL_K::Segment_2>(&*resultInter);
-                    std::cerr << "ERROR! Failed to estimate corner on boundary! (parallel lines)" << std::endl;
+                    pointsPolygon[notVisible] = r->target();
                 }
 
             }else{
@@ -602,7 +607,25 @@ void fillDepthMapWPlanes(DepthMap& map2fill, const DepthData::ViewData& image, c
         }
     }
 }
+MyPlane createPlaneFrom4Points(Point3 * points){
+  Eigen::Vector3d pA(points[0].x, points[0].y, points[0].z);
+  Eigen::Vector3d pB(points[1].x, points[1].y, points[1].z);
+  Eigen::Vector3d pC(points[2].x, points[2].y, points[2].z);
+  Eigen::Vector3d pd(points[3].x, points[3].y, points[3].z);
 
+  Eigen::Vector3d abc = (pB - pA).cross(pC-pA);
+  double d = -abc(0)*points[0].x-abc(1)*points[0].y-abc(2)*points[0].z;
+  Eigen::Vector3d pD = pd + (pd-pA).dot(abc)/abc.squaredNorm()*abc;
+
+  MyPlane mp;
+  mp.corners[0] = points[0];
+  mp.corners[1] = points[1];
+  mp.corners[2] = points[2];
+  mp.corners[3] = Point3(pD.x(), pD.y(), pD.z());
+  
+  return mp;
+  
+}
 std::pair<float,float> TriangulatePointsDelaunay(CGAL::Delaunay& delaunay, const Scene& scene, const DepthData::ViewData& image, const IndexArr& points, LidarMap& lPoints, uint8_t options)
 {
     DEBUG_EXTRA("About to triangulate");
@@ -696,13 +719,8 @@ std::pair<float,float> TriangulatePointsDelaunay(CGAL::Delaunay& delaunay, const
 
             std::vector<MyPlane> planes;
             Point3 corners_1[4] = {Point3(-6.47,21.,-1.44), Point3(-6.66,20.6,7.73), Point3(-13.3,19.8,7.67), Point3(-13.1, 20.2, -0.84)};
-            MyPlane plane1;
-            plane1.corners[0] = corners_1[0];
-            plane1.corners[1] = corners_1[1];
-            plane1.corners[2] = corners_1[2];
-            plane1.corners[3] = corners_1[3];
 
-            planes.push_back(plane1);
+            planes.push_back(createPlaneFrom4Points(corners_1));
             fillDepthMapWPlanes(map2fill, image, planes);
             for(auto x=0;x<imWidth;++x)
                 for(auto y=0;y<imHeight;++y)
