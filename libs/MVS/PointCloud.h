@@ -118,7 +118,7 @@ public:
 
 typedef MVS_API float Depth;
 typedef MVS_API Point3f Normal;
-typedef MVS_API pcl::PointCloud<pcl::PointXYZ>::Ptr LidarMap;
+typedef MVS_API pcl::PointCloud<pcl::XPointXYZ>::Ptr LidarMap;
 typedef MVS_API TImage<Depth> DepthMap;
 typedef MVS_API TImage<Normal> NormalMap;
 typedef MVS_API TImage<float> ConfidenceMap;

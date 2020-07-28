@@ -832,7 +832,7 @@ void Scene::transformPCL2MVS(const std::string& filename){
                 ASSERT(it->nClustered!=0);
                 float actualVisibility(0);
                 if (it->nClustered!=0)
-                    actualVisibility = std::min(it->nClustered/100.f,1.f);//1-EXP(-(it->nClustered)/1000.f); //Visibility bonus between 0 and 1
+                    actualVisibility = std::min(it->nClustered/50.f,1.f);//LOG10(it->nClustered)1-EXP(-(it->nClustered)/1000.f); //Visibility bonus between 0 and 1
                 vArr.Insert(actualVisibility);
             }
 
@@ -843,7 +843,7 @@ void Scene::transformPCL2MVS(const std::string& filename){
         pointCloudLidarCam.sensors = pSensors;
         pointCloudLidarCam.visibilities = vArr;
 
-        pcl::io::savePCDFile("/home/VAmblard/Downloads/mix_lidar_camera.pcd", *totalCloud);
+//        pcl::io::savePCDFile("/home/VAmblard/Downloads/mix_lidar_camera.pcd", *totalCloud);
         VERBOSE("%u camera points, %u LiDAR points", pointcloud.points.GetSize(), pointCloudLidarCam.points.GetSize() - pointcloud.points.GetSize());
 
         pointcloud.Release();
@@ -1029,7 +1029,7 @@ bool Scene::ReconstructMesh(std::string lidarFile, float distInsert, bool bUseFr
         const float BET = 16/32;
         const float GAM = 1/32;
 
-        if (useLidar){
+        if (0){
             int countCam(0);
             int countLid(0);
 

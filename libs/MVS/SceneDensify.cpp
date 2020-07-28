@@ -37,6 +37,9 @@
 #include <CGAL/Simple_cartesian.h>
 #include <CGAL/Delaunay_triangulation_2.h>
 #include <CGAL/Projection_traits_xy_3.h>
+#include <CGAL/Polygon_2.h>
+
+
 #include <CGAL/Exact_predicates_exact_constructions_kernel.h>
 #include <CGAL/Polygon_2_algorithms.h>
 #include <CGAL/intersections.h>
@@ -382,7 +385,9 @@ typedef kernel_t::Point_3 Point;
 // return also the estimated depth boundaries (min and max depth)
 
 bool checkCameraLidarConsistency(const int x, const int y, const int w, const int h, const DepthMap& xCam){
-    const int neighbors(1);
+    return ISEQUAL(xCam(y,x), 0.f);
+    /**
+    const int neighbors(2);
 
     int minX(MAXF(0, x-neighbors));
     int minY(MAXF(0, y-neighbors));
@@ -395,7 +400,7 @@ bool checkCameraLidarConsistency(const int x, const int y, const int w, const in
                 return false;
 
     return true;
-
+    **/
 }
 
 //We can't really do raytracing because we don't have any surface
@@ -404,6 +409,8 @@ bool checkCameraLidarConsistency(const int x, const int y, const int w, const in
 // but we dont want to remove edges ==> we need to check variance in both directions
 
 bool checkLidarConsistency(const Point3& p, const int w, const int h, const DepthMap& xLid){
+    return ISEQUAL(xLid((int)p.y, (int)p.x), p.z);
+    /**
     const int neighbors(5);
 
     const float maxDiffDepth(0.1);
@@ -463,6 +470,7 @@ bool checkLidarConsistency(const Point3& p, const int w, const int h, const Dept
         return false;
 
     return true;
+    **/
 }
 
 //Plane is an array (a,b,c,d) ax+by+cz+d=0
@@ -508,16 +516,17 @@ bool isPointInsideProjectedPlane(const Point2& pt, CGAL_K::Point_2 *pgn_begin, C
 // A plane is seen iff one of its corners is inside the image
 // Then we'd like to retrieve the polygon corresponding to the visible part of the plane
 // We identify the visible corners and the lines corresponding to those corners 
-bool isPlaneInsideImg(MyPlane plane, const DepthData::ViewData& image, CGAL_K::Point_2 * pointsPolygon){
+std::pair<bool, std::vector<CGAL_K::Point_2>> isPlaneInsideImg(MyPlane plane, const DepthData::ViewData& image){
 
     bool visibility[4] = {false, false, false, false};
     int nVis(0);
+    std::vector<CGAL_K::Point_2> pointsPolygon(4);
 
     for (int iLine = 0;iLine<4;++iLine){
         Point3 pCorner = image.camera.ProjectPointP3(plane.corners[iLine]);
         if (pCorner.z >=0 && pCorner.x >=0 && pCorner.y >=0 && pCorner.x/pCorner.z < image.image.width() && pCorner.y/pCorner.z < image.image.height()){
             visibility[iLine] = true;
-            pointsPolygon[iLine] = MVS2CGAL2<REAL>(Point2(pCorner.x/pCorner.z, pCorner.y/pCorner.z));
+            pointsPolygon.at(iLine) = MVS2CGAL2<REAL>(Point2(pCorner.x/pCorner.z, pCorner.y/pCorner.z));
             ++nVis;
         }
         else{
@@ -527,8 +536,8 @@ bool isPlaneInsideImg(MyPlane plane, const DepthData::ViewData& image, CGAL_K::P
     
     std::cerr << nVis << " corners in view" << std::endl;
 
-    if (!nVis)
-        return false;
+    if (!nVis || nVis==1)
+        return std::make_pair(false, pointsPolygon);
 
     
     CGAL_K::Point_2 topleftImage((CGAL_K::RT)(0), (CGAL_K::RT)(0));
@@ -554,48 +563,123 @@ bool isPlaneInsideImg(MyPlane plane, const DepthData::ViewData& image, CGAL_K::P
             Eigen::Vector3d lineProj(projPlucker(2,1), projPlucker(0,2), projPlucker(1,0));
 
             Point3 projNVisible = image.camera.ProjectPointP3(plane.corners[notVisible]);
-            CGAL_K::Ray_2 curRay;
+            CGAL_K::Point_2 projVisible = MVS2CGAL2<REAL>(image.camera.ProjectPointP(plane.corners[iVisible]));
+
 
             if (projNVisible.z >= 0){
-                curRay = CGAL_K::Ray_2(MVS2CGAL2<REAL>(image.camera.ProjectPointP(plane.corners[iVisible])), MVS2CGAL2<REAL>(Point2(projNVisible.x/projNVisible.z, projNVisible.y/projNVisible.z)) );
-            }else{
-                std::cerr << "Not implemented!!!" << std::endl;
-            }
-            auto resultInter = CGAL::intersection(imageBounds, curRay);
-
-            if (resultInter){
-                if (const CGAL_K::Point_2* p = boost::get<CGAL_K::Point_2>(&*resultInter)){
-                    pointsPolygon[notVisible] = *p;
+                CGAL_K::Ray_2 curRay  = CGAL_K::Ray_2(projVisible, MVS2CGAL2<REAL>(Point2(projNVisible.x/projNVisible.z, projNVisible.y/projNVisible.z)) );
+                auto resultInter = CGAL::intersection(imageBounds, curRay);
+                if (resultInter){
+                    if (const CGAL_K::Point_2* p = boost::get<CGAL_K::Point_2>(&*resultInter)){
+                        pointsPolygon.at(notVisible) = *p;
+                    }else{
+                        const CGAL_K::Segment_2* r = boost::get<CGAL_K::Segment_2>(&*resultInter);
+                            pointsPolygon.at(notVisible) = r->target();
+                        }
                 }else{
-                    const CGAL_K::Segment_2* r = boost::get<CGAL_K::Segment_2>(&*resultInter);
-                    pointsPolygon[notVisible] = r->target();
+                    std::cerr << "ERROR! Failed to estimate corner on boundary!" << std::endl;
                 }
 
             }else{
-                std::cerr << "ERROR! Failed to estimate corner on boundary!" << std::endl;
+                CGAL_K::Line_2 curLine = CGAL_K::Line_2((CGAL_K::RT)lineProj.x(), (CGAL_K::RT)lineProj.y(), (CGAL_K::RT)lineProj.z());
+                auto resultInter = CGAL::intersection(imageBounds, curLine);
+                if (resultInter){
+                    if (const CGAL_K::Point_2* p = boost::get<CGAL_K::Point_2>(&*resultInter)){
+                        pointsPolygon.at(notVisible) = *p;
+                    }else{
+                        std::cerr << "Visible: " << CGAL::to_double(projVisible.x()) << " " <<CGAL::to_double(projVisible.y()) << std::endl;
+                        const CGAL_K::Segment_2* r = boost::get<CGAL_K::Segment_2>(&*resultInter);
+                        std::cerr << CGAL::to_double(r->source().x()) << " " <<CGAL::to_double(r->source().y()) << std::endl;
+                        std::cerr << CGAL::to_double(r->target().x()) << " " <<CGAL::to_double(r->target().y()) << std::endl;
+                        if (CGAL::to_double(r->target().x()) - image.camera.K(0,2) > 0 && projNVisible.x - image.camera.K(0,2) > 0){
+                            std::cerr << "-> target" << std::endl;
+                            pointsPolygon.at(notVisible) = r->target();
+                        }else{
+                            pointsPolygon.at(notVisible) = r->source();
+                            std::cerr << "-> source" << std::endl;
+
+                        }
+                    }
+                }else{
+                    std::cerr << "ERROR! Failed to estimate corner on boundary!" << std::endl;
+                }
+            }
+        }
+    }
+
+    if (nVis <= 3){
+        std::cerr << "Before adding points, the polygon has " << pointsPolygon.size() << " points!" << std::endl ;
+        Point2 corners[4] = {Point2(0,0), Point2(image.image.width(),0), Point2(image.image.width(),image.image.height()), Point2(0,image.image.height())};
+
+        for (auto i=0;i<4;++i){
+            int nxt = (i==3)?0:i+1;
+            if (!visibility[i] && !visibility[nxt]){ //We might need to add extra points to the polygon 
+                int numLineA = (ISEQUAL(CGAL::to_double(pointsPolygon.at(i).x()), 0) << 1) | ((!ISEQUAL(CGAL::to_double(pointsPolygon.at(i).y()), 0)) << 0);
+                int numLineB = (ISEQUAL(CGAL::to_double(pointsPolygon.at(nxt).x()), 0) << 1) | ((!ISEQUAL(CGAL::to_double(pointsPolygon.at(nxt).y()), 0)) << 0);
+                std::cerr << numLineA << " " << numLineB << std::endl;
+                if (numLineA != numLineB){ //We need to add at least 1 corner
+                    // The easiest way to find out which corners we need to add is just to test both directions 
+                    // and the convexity of the resulting polygon
+
+                    std::vector<CGAL_K::Point_2> nPoints;
+                    bool pickedLines[4] = {false, false, false, false};
+
+                    for (auto j=0;j<=i;++j)
+                        nPoints.push_back(pointsPolygon.at(j));
+                
+                    for(auto iCorner=std::min(numLineA, numLineB);iCorner<std::max(numLineA, numLineB);++iCorner){
+                        nPoints.push_back(MVS2CGAL2<REAL>(corners[(iCorner+1)%4]));
+
+                        pickedLines[iCorner]=true;
+                    }
+                    
+                    for(auto j=i+1;j<4;++j)
+                        nPoints.push_back(pointsPolygon.at(j));
+                    
+                    CGAL::Polygon_2<CGAL_K> pgn(&*nPoints.begin(), &*nPoints.end());
+
+                    if(pgn.is_convex()){
+                        pointsPolygon = nPoints;
+                    }else{
+                        nPoints.clear();
+                        for (auto j=0;j<=i;++j)
+                            nPoints.push_back(pointsPolygon.at(j));
+                    
+                        for(auto iCorner=0;iCorner<4;++iCorner)
+                            if (!pickedLines[iCorner])
+                                nPoints.push_back(MVS2CGAL2<REAL>(corners[(iCorner+1)%4]));
+                        
+                        for(auto j=i+1;j<4;++j)
+                            nPoints.push_back(pointsPolygon.at(j));
+                        
+                        pgn = CGAL::Polygon_2<CGAL_K>(&*nPoints.begin(), &*nPoints.end());
+                        pointsPolygon = nPoints;
+                        if (!pgn.is_convex())
+                            std::cerr << "Shouldn't happen!" << std::endl;
+                    }
+                }
             }
         }
     }
     // If only one point was initially visible, we still have one point to estimate
-
-    return true;
+    return std::make_pair(true, pointsPolygon);
 }
 void fillDepthMapWPlanes(DepthMap& map2fill, const DepthData::ViewData& image, const std::vector<MyPlane>& allPlanes){
     const int imWidth = image.image.width();
     const int imHeight = image.image.height();
-    const int gridSpacing(4);
+    const int gridSpacing(6);
     for(const auto& plane: allPlanes){
-        CGAL_K::Point_2 pointsPolygon[4] = {MVS2CGAL2<REAL>(Point2(0,0)), MVS2CGAL2<REAL>(Point2(0,0)),MVS2CGAL2<REAL>(Point2(0,0)),MVS2CGAL2<REAL>(Point2(0,0))};
         CGAL_K::Plane_3 plane3d(MVS2CGAL3<REAL>(plane.corners[0]), MVS2CGAL3<REAL>(plane.corners[1]), MVS2CGAL3<REAL>(plane.corners[2]));
         Point3 curCameraLocation = image.camera.TransformPointC2W(Point3(0,0,0));
         //TODO: Check plane's orientation when creating the Plane_3
-        if (isPlaneInsideImg(plane, image, pointsPolygon) && plane3d.has_on_negative_side(MVS2CGAL3<REAL>(curCameraLocation))){ //check that the camera is facing the plane, not behind it
+        auto resInside = isPlaneInsideImg(plane, image);
+        if (resInside.first){ //check that the camera is facing the plane, not behind it
             std::cout << image.GetID() << std::endl;
             for(auto x=0;x<imWidth;++x){
                 for (auto y=0;y<imHeight;++y){
                     auto curDepth = map2fill(y,x);
                     Point2 curPt(x,y);
-                    if (x%gridSpacing==0 && y%gridSpacing==0 && isPointInsideProjectedPlane(curPt, pointsPolygon, pointsPolygon+4, CGAL_K())){
+                    if (x%gridSpacing==0 && y%gridSpacing==0 && isPointInsideProjectedPlane(curPt, &*resInside.second.begin(), &*resInside.second.end(), CGAL_K())){
                         std::pair<bool, double> resultDepth = getApproxDepthFromPlane(curPt, plane3d, image.camera);
                         if (resultDepth.first && (resultDepth.second < curDepth || ISEQUAL(curDepth, 0))){
 
@@ -670,7 +754,6 @@ std::pair<float,float> TriangulatePointsDelaunay(CGAL::Delaunay& delaunay, const
     }
 
     if (options & useLidar){ //We assume that the LIDAR scan is aligned with the SfM cloud
-        
          DepthMap xLid(imHeight, imWidth);
          std::vector<Point3> candidatePoints;
 
@@ -691,10 +774,6 @@ std::pair<float,float> TriangulatePointsDelaunay(CGAL::Delaunay& delaunay, const
                     if (ISEQUAL(xLid(y,x),0.f) || pt.z < xLid(y,x)){
                         candidatePoints.push_back(Point3(pt.x/pt.z,pt.y/pt.z,pt.z));
                         xLid(y,x) = pt.z;
-                        xCam(y,x) = pt.z;
-
-                        depthBounds.first = MINF(depthBounds.first, pt.z);
-                        depthBounds.second = MAXF(depthBounds.second, pt.z);
                     }
 
                     ++it;
@@ -705,7 +784,17 @@ std::pair<float,float> TriangulatePointsDelaunay(CGAL::Delaunay& delaunay, const
                 ++it;
             }
          }
+        std::cerr << candidatePoints.size() << std::endl;
 
+        for (Point3 curPoint: candidatePoints){
+            if (checkLidarConsistency(curPoint, imWidth, imHeight, xLid)){
+
+                delaunay.insert(CGAL::Point(curPoint.x, curPoint.y, curPoint.z));
+                xCam(int(curPoint.y), int(curPoint.x)) = curPoint.z; //Just for visualization purposes
+                depthBounds.first = MINF(depthBounds.first, static_cast<float>(curPoint.z));
+                depthBounds.second = MAXF(depthBounds.second, static_cast<float>(curPoint.z));
+              }
+           }
          const Image8U3& im(image.pImageData->image);
          VERBOSE("%f, %f", depthBounds.first, depthBounds.second);
          ExportOverlayedImage(ComposeDepthFilePath(image.GetID(), "raw_lidar_points.png"), im, xCam, depthBounds.first, depthBounds.second, false);
@@ -719,13 +808,18 @@ std::pair<float,float> TriangulatePointsDelaunay(CGAL::Delaunay& delaunay, const
 
             std::vector<MyPlane> planes;
             Point3 corners_1[4] = {Point3(-6.47,21.,-1.44), Point3(-6.66,20.6,7.73), Point3(-13.3,19.8,7.67), Point3(-13.1, 20.2, -0.84)};
+            Point3 corners_2[4] = {Point3(-13.258301,20.378471,-0.662316), Point3(-13.740501,20.034218,10.402382), Point3(-17.336002,46.391182,11.441795),Point3(-17.234077,46.558113,-1.513632)};
+            Point3 corners_3[4] = {Point3(6.267281,64.451820,11.510517), Point3(6.114540,64.451836,1.408474), Point3(8.864605,50.534073,-1.006508),Point3(8.991833,50.345917,10.174690)};
 
             planes.push_back(createPlaneFrom4Points(corners_1));
+            planes.push_back(createPlaneFrom4Points(corners_2));
+            planes.push_back(createPlaneFrom4Points(corners_3));
             fillDepthMapWPlanes(map2fill, image, planes);
             for(auto x=0;x<imWidth;++x)
                 for(auto y=0;y<imHeight;++y)
-                    if (ISEQUAL(xCam(y,x), 0.)&&!ISEQUAL(map2fill(y,x), 0.))
-                        delaunay.insert(CGAL::Point(x,y,map2fill(y,x)));
+                    if (!ISEQUAL(map2fill(y,x), 0.))
+                        if (checkCameraLidarConsistency(x, y, imWidth, imHeight, xCam))
+                            delaunay.insert(CGAL::Point(x,y,map2fill(y,x)));
 
             
             const Image8U3& im(image.pImageData->image);
@@ -816,7 +910,7 @@ bool DepthMapsData::InitDepthMap(DepthData& depthData)
     CGAL::Delaunay delaunay, delaunayCamera, delaunayLidar;
 
     if(!dualMaps){
-        useLC = (1 << 0) | (1 << 2); //use planes
+        useLC = (1 << 0); //| (1 << 2); //use planes
         if (depthData.lScan!=nullptr)
             useLC |= (1 << 1);
         const std::pair<float,float> thDepth(TriangulatePointsDelaunay(delaunay, scene, image, depthData.points, depthData.lScan, useLC));
@@ -1994,6 +2088,44 @@ bool Scene::DenseReconstruction()
     if (!ComputeDepthMaps(data))
         return false;
 
+    LidarMap lScan(data.depthMaps.arrDepthData[0].lScan);
+    LidarMap nCloud(new pcl::PointCloud<pcl::XPointXYZ>);
+    
+    for (auto it = lScan->begin();it!=lScan->end();++it){
+        if (ISEQUAL(it->z, 0.f))
+            continue;
+        bool valid = true;
+        FOREACH(i, images) {
+            const DepthData& depthData(data.depthMaps.arrDepthData[i]);
+            if (depthData.IsValid() && !depthData.IsEmpty()){
+            const DepthMap& curDMap(depthData.depthMap);
+            const Image8U::Size sizeMap(curDMap.size());            
+
+            const Point3f pt(depthData.images[0].camera.ProjectPointP3(Point3d(it->x, it->y, it->z)));
+            int x = ROUND2INT(pt.x/pt.z);
+            int y = ROUND2INT(pt.y/pt.z);
+            if (0 <= x && 0 <= y && x <  sizeMap.width && y < sizeMap.height){
+                if (!ISEQUAL(curDMap(y,x), 0.f)){
+                    valid = false;
+                    break;
+                }
+            }
+            }
+        }
+        if (valid){
+            nCloud->push_back(*it);
+        }
+    
+    }
+    std::cerr << nCloud->points.size() << std::endl;
+    for(auto idx=0;idx<data.images.GetSize();++idx){
+        DepthData& depthData(data.depthMaps.arrDepthData[idx]);
+        depthData.Release();
+    }
+    
+    pcl::io::savePCDFile("/home/victor/Downloads/filtered_cloud.pcd", *nCloud);
+
+
     // fuse all depth-maps
     pointcloud.Release();
     data.depthMaps.FuseDepthMaps(pointcloud, OPTDENSE::nEstimateColors == 2, OPTDENSE::nEstimateNormals == 2);
@@ -2313,10 +2445,7 @@ void Scene::DenseReconstructionEstimate(void* pData)
         case EVT_CLOSE: {
 //            data.depthMaps.loadAllLidar();
 
-            for(auto idx=0;idx<data.images.GetSize();++idx){
-                DepthData& depthData(data.depthMaps.arrDepthData[idx]);
-                depthData.Release();
-            }
+
 
             return; }
 

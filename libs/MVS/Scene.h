@@ -58,7 +58,7 @@ public:
 	PointCloud pointcloud; // point-cloud (sparse or dense), each containing the point position and the views seeing it
     PointCloud pointCloudLidarCam; //point cloud fusing camera images and point cloud measurements
 	Mesh mesh; // mesh, represented as vertices and triangles, constructed from the input point-cloud
-    pcl::PointCloud<pcl::PointXYZ>::Ptr lidarCloud;
+    pcl::PointCloud<pcl::XPointXYZ>::Ptr lidarCloud;
 	unsigned nCalibratedImages; // number of valid images
 
 	unsigned nMaxThreads; // maximum number of threads used to distribute the work load

@@ -193,8 +193,8 @@ bool Scene::LoadInterface(const String & fileName)
 } // LoadInterface
 
 bool Scene::LoadLidarScan(const String & fileName){
-   lidarCloud = static_cast<pcl::PointCloud<pcl::PointXYZ>::Ptr>(new pcl::PointCloud<pcl::PointXYZ>);
-   int success = pcl::io::loadPCDFile<pcl::PointXYZ>(fileName, *lidarCloud);
+   lidarCloud = static_cast<pcl::PointCloud<pcl::XPointXYZ>::Ptr>(new pcl::PointCloud<pcl::XPointXYZ>);//;
+   int success = pcl::io::loadPCDFile<pcl::XPointXYZ>(fileName, *lidarCloud);
     if (success == -1){
         VERBOSE("Failed to open PCD file");
     }
