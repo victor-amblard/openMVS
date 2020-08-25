@@ -905,41 +905,17 @@ bool DepthMapsData::InitDepthMap(DepthData& depthData)
     DEBUG_EXTRA("Image has width %u and height %u", image.image.width(), image.image.height());
     // triangulate in-view points
     uint8_t useLC = 0;
-    bool dualMaps = false;
 
     CGAL::Delaunay delaunay, delaunayCamera, delaunayLidar;
 
-    if(!dualMaps){
-        useLC = (1 << 0); //| (1 << 2); //use planes
-        if (depthData.lScan!=nullptr)
-            useLC |= (1 << 1);
-        const std::pair<float,float> thDepth(TriangulatePointsDelaunay(delaunay, scene, image, depthData.points, depthData.lScan, useLC));
-        depthData.dMin = thDepth.first*0.9f;
-        depthData.dMax = thDepth.second*1.1f;
-        VERBOSE("Simultaneous depth map initialization");
-        VERBOSE("%f,%f", depthData.dMin, depthData.dMax);
-
-    }else{
-        // We initialize 2 depth maps (1 for LiDAR and 1 for camera) and then try to merge them
-        useLC = (1 << 0);
-        const std::pair<float,float> thDepthCamera(TriangulatePointsDelaunay(delaunayCamera, scene, image, depthData.points, depthData.lScan, useLC));
-        
-        depthData.dMinCamera = thDepthCamera.first*0.9f;
-        depthData.dMaxCamera = thDepthCamera.second*1.1f;
-        
-        useLC = (1 << 1);
-        const std::pair<float,float> thDepthLidar(TriangulatePointsDelaunay(delaunayLidar, scene, image, depthData.points, depthData.lScan, useLC));
-        
-        depthData.dMinLidar = thDepthLidar.first*0.9f;
-        depthData.dMaxLidar = thDepthLidar.second*1.1f;
-
-        depthData.depthMapLidar.create(image.image.size());
-        depthData.depthMapCamera.create(image.image.size());
-        depthData.normalMapCamera.create(image.image.size());
-        depthData.normalMapLidar.create(image.image.size());
-
-        
-    }
+    useLC = (1 << 0); //| (1 << 2); //use planes
+    if (depthData.lScan!=nullptr)
+        useLC |= (1 << 1);
+    const std::pair<float,float> thDepth(TriangulatePointsDelaunay(delaunay, scene, image, depthData.points, depthData.lScan, useLC));
+    depthData.dMin = thDepth.first*0.9f;
+    depthData.dMax = thDepth.second*1.1f;
+    VERBOSE("Simultaneous depth map initialization");
+    VERBOSE("%f,%f", depthData.dMin, depthData.dMax);
     
     // create rough depth-map by interpolating inside triangles
     const Camera& camera = image.camera;
@@ -964,92 +940,30 @@ bool DepthMapsData::InitDepthMap(DepthData& depthData)
             depthMap(pt) = z;
             normalMap(pt) = normal;
         }
-    };
-    
+    };            
+    RasterDepthDataPlaneData data = {camera, depthData.depthMap, depthData.normalMap};
 
-    if (!dualMaps){
-            
-        RasterDepthDataPlaneData data = {camera, depthData.depthMap, depthData.normalMap};
+    for (CGAL::Delaunay::Face_iterator it=delaunay.faces_begin(); it!=delaunay.faces_end(); ++it) {
 
-        for (CGAL::Delaunay::Face_iterator it=delaunay.faces_begin(); it!=delaunay.faces_end(); ++it) {
+        const CGAL::Delaunay::Face& face = *it;
+        const Point3f i0(reinterpret_cast<const Point3d&>(face.vertex(0)->point()));
+        const Point3f i1(reinterpret_cast<const Point3d&>(face.vertex(1)->point()));
+        const Point3f i2(reinterpret_cast<const Point3d&>(face.vertex(2)->point()));
+        // compute the plane defined by the 3 points
+        const Point3f c0(camera.TransformPointI2C(i0));
+        const Point3f c1(camera.TransformPointI2C(i1));
+        const Point3f c2(camera.TransformPointI2C(i2));
+        const Point3f edge1(c1-c0);
+        const Point3f edge2(c2-c0);
+        data.normal = normalized(edge2.cross(edge1));
+        data.normalPlane = data.normal * INVERT(data.normal.dot(c0));
+        // draw triangle and for each pixel compute depth as the ray intersection with the plane
+        Image8U::RasterizeTriangle(reinterpret_cast<const Point2f&>(i2), reinterpret_cast<const Point2f&>(i1), reinterpret_cast<const Point2f&>(i0), data);
+    }
+    ExportDepthMap(ComposeDepthFilePath(image.GetID(), "before.png"), depthData.depthMap);
 
-            const CGAL::Delaunay::Face& face = *it;
-            const Point3f i0(reinterpret_cast<const Point3d&>(face.vertex(0)->point()));
-            const Point3f i1(reinterpret_cast<const Point3d&>(face.vertex(1)->point()));
-            const Point3f i2(reinterpret_cast<const Point3d&>(face.vertex(2)->point()));
-            // compute the plane defined by the 3 points
-            const Point3f c0(camera.TransformPointI2C(i0));
-            const Point3f c1(camera.TransformPointI2C(i1));
-            const Point3f c2(camera.TransformPointI2C(i2));
-            const Point3f edge1(c1-c0);
-            const Point3f edge2(c2-c0);
-            data.normal = normalized(edge2.cross(edge1));
-            data.normalPlane = data.normal * INVERT(data.normal.dot(c0));
-            // draw triangle and for each pixel compute depth as the ray intersection with the plane
-            Image8U::RasterizeTriangle(reinterpret_cast<const Point2f&>(i2), reinterpret_cast<const Point2f&>(i1), reinterpret_cast<const Point2f&>(i0), data);
-        }
-        ExportDepthMap(ComposeDepthFilePath(image.GetID(), "before.png"), depthData.depthMap);
+    DEBUG_ULTIMATE("Depth-map %3u roughly estimated from %u sparse points: %dx%d (%s)", &depthData-arrDepthData.Begin(), depthData.points.GetSize(), image.image.width(), image.image.height(), TD_TIMER_GET_FMT().c_str());
 
-        DEBUG_ULTIMATE("Depth-map %3u roughly estimated from %u sparse points: %dx%d (%s)", &depthData-arrDepthData.Begin(), depthData.points.GetSize(), image.image.width(), image.image.height(), TD_TIMER_GET_FMT().c_str());
-    }else{
-        RasterDepthDataPlaneData dataLidar = {camera, depthData.depthMapLidar, depthData.normalMapLidar};
-        RasterDepthDataPlaneData dataCamera = {camera, depthData.depthMapCamera, depthData.normalMapCamera};
-        
-        for (CGAL::Delaunay::Face_iterator it=delaunayCamera.faces_begin(); it!=delaunayCamera.faces_end(); ++it) {
-
-            const CGAL::Delaunay::Face& face = *it;
-            const Point3f i0(reinterpret_cast<const Point3d&>(face.vertex(0)->point()));
-            const Point3f i1(reinterpret_cast<const Point3d&>(face.vertex(1)->point()));
-            const Point3f i2(reinterpret_cast<const Point3d&>(face.vertex(2)->point()));
-            // compute the plane defined by the 3 points
-            const Point3f c0(camera.TransformPointI2C(i0));
-            const Point3f c1(camera.TransformPointI2C(i1));
-            const Point3f c2(camera.TransformPointI2C(i2));
-            const Point3f edge1(c1-c0);
-            const Point3f edge2(c2-c0);
-            dataCamera.normal = normalized(edge2.cross(edge1));
-            dataCamera.normalPlane = dataCamera.normal * INVERT(dataCamera.normal.dot(c0));
-            // draw triangle and for each pixel compute depth as the ray intersection with the plane
-            Image8U::RasterizeTriangle(reinterpret_cast<const Point2f&>(i2), reinterpret_cast<const Point2f&>(i1), reinterpret_cast<const Point2f&>(i0), dataCamera);
-        }
-        for (CGAL::Delaunay::Face_iterator it=delaunayLidar.faces_begin(); it!=delaunayLidar.faces_end(); ++it) {
-
-            const CGAL::Delaunay::Face& face = *it;
-            const Point3f i0(reinterpret_cast<const Point3d&>(face.vertex(0)->point()));
-            const Point3f i1(reinterpret_cast<const Point3d&>(face.vertex(1)->point()));
-            const Point3f i2(reinterpret_cast<const Point3d&>(face.vertex(2)->point()));
-            // compute the plane defined by the 3 points
-            const Point3f c0(camera.TransformPointI2C(i0));
-            const Point3f c1(camera.TransformPointI2C(i1));
-            const Point3f c2(camera.TransformPointI2C(i2));
-            const Point3f edge1(c1-c0);
-            const Point3f edge2(c2-c0);
-            dataLidar.normal = normalized(edge2.cross(edge1));
-            dataLidar.normalPlane = dataLidar.normal * INVERT(dataLidar.normal.dot(c0));
-            // draw triangle and for each pixel compute depth as the ray intersection with the plane
-            Image8U::RasterizeTriangle(reinterpret_cast<const Point2f&>(i2), reinterpret_cast<const Point2f&>(i1), reinterpret_cast<const Point2f&>(i0), dataLidar);
-        }
-        
-        //Then we compute a global normal map and deduce the depth in the camera frame
-        depthData.dMin = depthData.dMinCamera;
-        depthData.dMax = depthData.dMaxCamera;
-        
-        for(size_t i=0;i<dataCamera.normalMap.area();++i){
-            Normal& nC(dataCamera.normalMap[i]);
-            Normal& nL(dataLidar.normalMap[i]);
-
-            if (ISZERO(nC) || ISZERO(nL)){
-                depthData.normalMap[i] = nC + nL;
-            }else{
-                depthData.normalMap[i] = normalized((nC+nL)/2);
-            }
-            depthData.depthMap[i] = depthData.depthMapCamera[i];
-        }
-
-        ExportDepthMap(ComposeDepthFilePath(image.GetID(), "before_lidar.png"), depthData.depthMapLidar);
-        ExportDepthMap(ComposeDepthFilePath(image.GetID(), "before_camera.png"), depthData.depthMapCamera);
-        ExportNormalMap(ComposeDepthFilePath(image.GetID(), "normalCamera.png"), depthData.normalMapCamera);
-    }   
     return true;
 } // InitDepthMap
 /*----------------------------------------------------------------*/
@@ -2098,18 +2012,19 @@ bool Scene::DenseReconstruction()
         FOREACH(i, images) {
             const DepthData& depthData(data.depthMaps.arrDepthData[i]);
             if (depthData.IsValid() && !depthData.IsEmpty()){
-            const DepthMap& curDMap(depthData.depthMap);
-            const Image8U::Size sizeMap(curDMap.size());            
-
-            const Point3f pt(depthData.images[0].camera.ProjectPointP3(Point3d(it->x, it->y, it->z)));
-            int x = ROUND2INT(pt.x/pt.z);
-            int y = ROUND2INT(pt.y/pt.z);
-            if (0 <= x && 0 <= y && x <  sizeMap.width && y < sizeMap.height){
-                if (!ISEQUAL(curDMap(y,x), 0.f)){
-                    valid = false;
-                    break;
+                const DepthMap& curDMap(depthData.depthMap);
+                const Image8U::Size sizeMap(curDMap.size());            
+                FOREACH(j, depthData.images){
+                    const Point3f pt(depthData.images[0].camera.ProjectPointP3(Point3d(it->x, it->y, it->z)));
+                    int x = ROUND2INT(pt.x/pt.z);
+                    int y = ROUND2INT(pt.y/pt.z);
+                    if (0 <= x && 0 <= y && x <  depthData.images[0].image.width() && y < depthData.images[0].image.height()){
+                        if (!ISEQUAL(curDMap(y,x), 0.f)){
+                            valid = false;
+                            break;
+                        }
+                    }
                 }
-            }
             }
         }
         if (valid){
@@ -2120,7 +2035,9 @@ bool Scene::DenseReconstruction()
     std::cerr << nCloud->points.size() << std::endl;
     for(auto idx=0;idx<data.images.GetSize();++idx){
         DepthData& depthData(data.depthMaps.arrDepthData[idx]);
+        depthData.ReleaseImages();
         depthData.Release();
+
     }
     
     pcl::io::savePCDFile("/home/victor/Downloads/filtered_cloud.pcd", *nCloud);
@@ -2437,7 +2354,6 @@ void Scene::DenseReconstructionEstimate(void* pData)
             #endif
             // save compute depth-map for this image
             depthData.Save(ComposeDepthFilePath(depthData.GetView().GetID(), "dmap"));
-            depthData.ReleaseImages();
 //            depthData.Release();
             data.progress->operator++();
             break; }
