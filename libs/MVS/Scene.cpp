@@ -192,7 +192,8 @@ bool Scene::LoadInterface(const String & fileName)
 	return true;
 } // LoadInterface
 
-bool Scene::LoadLidarScan(const String & fileName){
+bool Scene::LoadLidarScan(const String & fileName)
+{
    lidarCloud = static_cast<pcl::PointCloud<pcl::XPointXYZ>::Ptr>(new pcl::PointCloud<pcl::XPointXYZ>);//;
    int success = pcl::io::loadPCDFile<pcl::XPointXYZ>(fileName, *lidarCloud);
     if (success == -1){
@@ -203,6 +204,13 @@ bool Scene::LoadLidarScan(const String & fileName){
    return (success!=-1);
 
 }
+
+bool Scene::LoadPlanes(const String & filename) 
+{
+	// TODO I/O
+	return true;
+}
+
 bool Scene::SaveInterface(const String & fileName) const
 {
 	TD_TIMER_STARTD();

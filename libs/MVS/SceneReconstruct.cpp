@@ -41,7 +41,7 @@
 #include <CGAL/AABB_traits.h>
 #include <CGAL/AABB_triangle_primitive.h>
 #include <CGAL/Polyhedron_3.h>
-
+#include <fstream>
 using namespace MVS;
 
 
@@ -790,7 +790,50 @@ void Scene::transformPCL2MVS(const std::string& filename){
         PointCloud::LVisibilityArr vArr;
 
         pcl::PointCloud<pcl::PointXYZRGB>::Ptr totalCloud(new pcl::PointCloud<pcl::PointXYZRGB>);
+	
+	bool useSegments = false;
+	std::string fnSegments = "/home/victor/Data/Stages/MIT/newer_college_dataset/infra1/segments.txt";
 
+	if (useSegments){
+		std::cerr << "Using segments!" << std::endl;
+
+		std::string line;
+	std::ifstream myfile (fnSegments);
+		std::vector<std::pair<Point3f, PointCloud::ViewArr>> pointsWView;
+
+		if (myfile.is_open())
+		{
+			while(std::getline(myfile, line)){
+				std::stringstream  lineStream(line);
+				double x1, y1,z1,x2,y2,z2;
+				lineStream >> x1 >> y1 >> z1 >> x2 >> y2 >> z2;
+				Point3f start(x1,y1,z1);
+				Point3f end(x2, y2,z2);
+				int view;
+				PointCloud::ViewArr allViews;
+				while (lineStream >> view){
+					allViews.Insert(view);
+				}
+				int subd = std::lrint(cv::norm(end-start)/0.1);
+				for (int i = 0; i < subd ; ++i){
+					Point3f p = start + i/(double)subd * (end-start) ;
+					pointsWView.push_back(std::make_pair(p, allViews));
+				}
+			}
+			myfile.close();
+		}
+		for (int i = 0 ; i < pointsWView.size() ; ++i){
+			const Point3f& curPMVS(pointsWView.at(i).first);
+			pointsList.Insert(curPMVS);
+			pViews.Insert(pointsWView.at(i).second);
+			pSensors.Insert(CAMERA_WEIGHT);
+			vArr.Insert(0.f);
+			pcl::PointXYZRGB curP(curPMVS.x, curPMVS.y, curPMVS.z);
+			curP.g = 255;
+			totalCloud->push_back(curP);
+
+		}
+	}
         bool testLidarOnly = false;
          // Insert camera points
         if (!testLidarOnly){
@@ -832,7 +875,7 @@ void Scene::transformPCL2MVS(const std::string& filename){
                 ASSERT(it->nClustered!=0);
                 float actualVisibility(0);
                 if (it->nClustered!=0)
-                    actualVisibility = std::min(it->nClustered/50.f,1.f);//LOG10(it->nClustered)1-EXP(-(it->nClustered)/1000.f); //Visibility bonus between 0 and 1
+                    actualVisibility = std::min(it->nClustered/30.f,1.f);//LOG10(it->nClustered)1-EXP(-(it->nClustered)/1000.f); //Visibility bonus between 0 and 1
                 vArr.Insert(actualVisibility);
             }
 
@@ -843,8 +886,8 @@ void Scene::transformPCL2MVS(const std::string& filename){
         pointCloudLidarCam.sensors = pSensors;
         pointCloudLidarCam.visibilities = vArr;
 
-//        pcl::io::savePCDFile("/home/VAmblard/Downloads/mix_lidar_camera.pcd", *totalCloud);
-        VERBOSE("%u camera points, %u LiDAR points", pointcloud.points.GetSize(), pointCloudLidarCam.points.GetSize() - pointcloud.points.GetSize());
+        pcl::io::savePCDFile("/home/victor/Downloads/mix_lidar_camera.pcd", *totalCloud);
+        VERBOSE("%u camera points, %u LiDAR or segments points", pointcloud.points.GetSize(), pointCloudLidarCam.points.GetSize() - pointcloud.points.GetSize());
 
         pointcloud.Release();
 }
@@ -1029,7 +1072,7 @@ bool Scene::ReconstructMesh(std::string lidarFile, float distInsert, bool bUseFr
         const float BET = 16/32;
         const float GAM = 1/32;
 
-        if (0){
+        if (1){
             int countCam(0);
             int countLid(0);
 
@@ -1041,7 +1084,7 @@ bool Scene::ReconstructMesh(std::string lidarFile, float distInsert, bool bUseFr
 
                 for(int j=0;j<3;++j){
                     uint8_t sensorOrigin = facet.first->vertex((facet.second+j+1)%3)->info().sensor;
-
+//                    pcl->push_back(pcl::PointXYZ(facet.first->vertex((facet.second+j+1)%3)))
                     fs += sensorOrigin;
 
                     if (sensorOrigin == LIDAR_WEIGHT)
